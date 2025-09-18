@@ -40,7 +40,7 @@ This implementation was written using NodeJS 18.16.0 as a target. If you are usi
 
 ### OpenAI Realtime API Integration
 
-This implementation uses OpenAI's Realtime API to provide:
+This implementation uses OpenAI's Realtime API (stable release) to provide:
 - Real-time speech recognition
 - Natural language understanding and processing
 - Text-to-speech generation
