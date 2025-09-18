@@ -1,5 +1,4 @@
 name: Fly Deploy
-
 on:
   push:
     branches: [ "main" ]
@@ -12,18 +11,18 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      FLY_APP: your-app-name   # <-- set to your Fly app
+      FLY_APP: your-app-name   # <-- set this
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Flyctl
-        uses: superfly/flyctl-actions/setup-flyctl@v2
+      # Use the setup action (recommended) — pin to a v1.x release
+      - uses: superfly/flyctl-actions/setup-flyctl@v1.5
+        # Optionally pin flyctl itself:
+        # with:
+        #   version: 0.3.180
 
       - name: Deploy
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
-          flyctl deploy \
-            --app "${FLY_APP}" \
-            --remote-only
+          flyctl deploy --app "${FLY_APP}" --remote-only
