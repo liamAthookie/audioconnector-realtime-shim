@@ -15,6 +15,7 @@
     },
     "scripts": {
         "start": "ts-node ./src/index.ts",
+        "start:prod": "node ./dist/index.js",
         "clean": "rimraf ./dist/",
         "prebuild": "node -p \"'export const LIB_VERSION = ' + JSON.stringify(require('./package.json').version) + ';'\" > src/__version.ts",
         "build": "npm run clean && tsc",
