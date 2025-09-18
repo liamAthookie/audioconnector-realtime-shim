@@ -1,5 +1,7 @@
 [app]
-  primary_region = "iad"
+  primary_region = "arn"
+  app = "audioconnector-realtime-shim"
+
 
 [build]
 
