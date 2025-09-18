@@ -1,5 +1,7 @@
 # AudioConnector Server Reference Guide
 
+### ¯\_(ツ)_/¯
+
 ### Overview
 This repository contains a production-ready AudioConnector Server integrated with OpenAI's Realtime API (stable release). The server provides real-time voice AI capabilities for customer service applications and can be deployed to Fly.io using GitHub Actions.
 
