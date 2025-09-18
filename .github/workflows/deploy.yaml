@@ -15,14 +15,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Use the setup action (recommended) — pin to a v1.x release
-      - uses: superfly/flyctl-actions/setup-flyctl@v1.5
-        # Optionally pin flyctl itself:
-        # with:
-        #   version: 0.3.180
+      # pick ONE of these:
+      - uses: superfly/flyctl-actions/setup-flyctl@v1
+      # - uses: superfly/flyctl-actions/setup-flyctl@1.5
+      # - uses: superfly/flyctl-actions/setup-flyctl@master  # per README
 
       - name: Deploy
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        run: |
-          flyctl deploy --app "${FLY_APP}" --remote-only
+        run: flyctl deploy --app "${FLY_APP}" --remote-only
