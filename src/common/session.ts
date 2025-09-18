@@ -51,6 +51,7 @@ export class Session {
     private selectedBot: BotResource | null = null;
     private isCapturingDTMF = false;
     private isAudioPlaying = false;
+    private audioProcessingMode: 'asr' | 'realtime' = 'realtime';
 
     constructor(ws: WebSocket, sessionId: string, url: string) {
         this.ws = ws;
@@ -248,6 +249,10 @@ export class Session {
                 if (response.audioBytes) {
                     this.sendAudio(response.audioBytes);
                 }
+            })
+            .catch((error) => {
+                console.error('Error getting initial bot response:', error);
+                this.sendDisconnect('error', 'Failed to initialize bot', {});
             });
     }
 
@@ -268,6 +273,13 @@ export class Session {
             return;
         }
 
+        // Use OpenAI Realtime API for audio processing
+        if (this.audioProcessingMode === 'realtime') {
+            this.selectedBot.processAudio(data);
+            return;
+        }
+
+        // Fallback to traditional ASR processing
         /*
         * For this implementation, we are going to ignore input while there
         * is audio playing. You may choose to continue to process audio if
@@ -308,10 +320,13 @@ export class Session {
                             if (response.endSession) {
                                 this.sendDisconnect('completed', '', {});
                             }
+                        })
+                        .catch((error) => {
+                            console.error('Error getting bot response:', error);
+                            this.sendDisconnect('error', 'Bot processing error', {});
                         });
                 });
         }
-
         this.asrService.processAudio(data);
     }
 
@@ -368,10 +383,23 @@ export class Session {
                             }
 
                             this.isCapturingDTMF = false;
+                        })
+                        .catch((error) => {
+                            console.error('Error processing DTMF:', error);
+                            this.sendDisconnect('error', 'DTMF processing error', {});
                         });
                 });
         }
 
         this.dtmfService.processDigit(digit);
+    }
+
+    /*
+    * Clean up session resources
+    */
+    cleanup(): void {
+        if (this.selectedBot) {
+            this.selectedBot.disconnect();
+        }
     }
 };

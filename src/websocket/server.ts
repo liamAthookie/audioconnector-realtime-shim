@@ -44,12 +44,18 @@ export class Server {
             ws.on('close', () => {
                 const session = this.sessionMap.get(ws);
                 console.log('WebSocket connection closed.');
+                if (session) {
+                    session.cleanup();
+                }
                 this.deleteConnection(ws);
             });
 
             ws.on('error', (error: Error) => {
                 const session = this.sessionMap.get(ws);
                 console.log(`WebSocket Error: ${error}`);
+                if (session) {
+                    session.cleanup();
+                }
                 ws.close();
             });
 
@@ -99,6 +105,7 @@ export class Server {
 
         try {
             session.close();
+            session.cleanup();
         } catch {
         }
 

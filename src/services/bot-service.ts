@@ -1,6 +1,6 @@
 import { JsonStringMap } from "../protocol/core";
 import { BotTurnDisposition } from "../protocol/voice-bots";
-import { TTSService } from "./tts-service";
+import { OpenAIRealtimeService, OpenAIRealtimeConfig } from "./openai-realtime-service";
 
 /*
 * This class provides support for retreiving a Bot Resource based on the supplied
@@ -10,8 +10,24 @@ import { TTSService } from "./tts-service";
 * a real implemetation will need to be provided.
 */
 export class BotService {
+    private openAIConfig: OpenAIRealtimeConfig;
+
+    constructor() {
+        this.openAIConfig = {
+            apiKey: process.env.OPENAI_API_KEY || '',
+            model: 'gpt-4o-realtime-preview-2024-10-01',
+            voice: 'alloy',
+            instructions: 'You are a helpful voice assistant for customer service. Be concise, friendly, and professional.',
+            temperature: 0.8
+        };
+    }
+
     getBotIfExists(connectionUrl: string, inputVariables: JsonStringMap): Promise<BotResource | null> {
-        return Promise.resolve(new BotResource());
+        if (!this.openAIConfig.apiKey) {
+            console.error('OpenAI API key not configured');
+            return Promise.resolve(null);
+        }
+        return Promise.resolve(new BotResource(this.openAIConfig));
     }
 }
 
@@ -19,7 +35,67 @@ export class BotService {
 * This class provides support for the various methods needed to interact with an Bot.
 */
 export class BotResource {
-    private ttsService = new TTSService();
+    private openAIService: OpenAIRealtimeService;
+    private isInitialized = false;
+    private pendingAudioData: Uint8Array[] = [];
+    private currentResponse: BotResponse | null = null;
+    private responsePromise: Promise<BotResponse> | null = null;
+    private responseResolve: ((response: BotResponse) => void) | null = null;
+
+    constructor(config: OpenAIRealtimeConfig) {
+        this.openAIService = new OpenAIRealtimeService(config);
+        this.setupEventHandlers();
+    }
+
+    private setupEventHandlers(): void {
+        this.openAIService.on('transcript', (transcript) => {
+            console.log('OpenAI transcript:', transcript.text);
+        });
+
+        this.openAIService.on('text_response', (text) => {
+            console.log('OpenAI text response:', text);
+            if (this.currentResponse) {
+                this.currentResponse.text = text;
+            }
+        });
+
+        this.openAIService.on('audio_response', (audioBuffer: Buffer) => {
+            console.log('OpenAI audio response received:', audioBuffer.length, 'bytes');
+            if (this.currentResponse) {
+                // Convert PCM16 back to PCMU for the AudioConnector client
+                const pcm16Data = new Int16Array(audioBuffer.buffer, audioBuffer.byteOffset, audioBuffer.length / 2);
+                const pcmuData = this.convertPCM16ToPCMU(pcm16Data);
+                this.currentResponse.audioBytes = pcmuData;
+            }
+        });
+
+        this.openAIService.on('response_complete', () => {
+            console.log('OpenAI response complete');
+            if (this.responseResolve && this.currentResponse) {
+                this.responseResolve(this.currentResponse);
+                this.responseResolve = null;
+                this.currentResponse = null;
+            }
+        });
+
+        this.openAIService.on('error', (error) => {
+            console.error('OpenAI service error:', error);
+            if (this.responseResolve) {
+                const errorResponse = new BotResponse('no_match', 'I apologize, but I encountered an error. Please try again.')
+                    .withConfidence(0.5);
+                this.responseResolve(errorResponse);
+                this.responseResolve = null;
+                this.currentResponse = null;
+            }
+        });
+    }
+
+    private async ensureInitialized(): Promise<void> {
+        if (!this.isInitialized) {
+            await this.openAIService.connect();
+            this.isInitialized = true;
+        }
+    }
 
     /*
     * This method is used to retrieve the initial response from the Bot.
@@ -27,18 +103,11 @@ export class BotResource {
     * This is a "dummy" implementation that will need to be replaced.
     */
     getInitialResponse(): Promise<BotResponse> {
-        const message = 'Hello and welcome to AudioConnector.';
-
-        /*
-        * The TTS Service has a "dummy" implementation that will need
-        * to be replaced.
-        * 
-        * See `tts-service` in this folder for more information.
-        */
-        return this.ttsService.getAudioBytes(message)
-            .then(audioBytes => new BotResponse('match', message)
-                .withConfidence(1.0)
-                .withAudioBytes(audioBytes));
+        return this.ensureInitialized().then(() => {
+            // Send initial greeting message to OpenAI
+            const initialMessage = "Please greet the user and ask how you can help them today.";
+            return this.getBotResponse(initialMessage);
+        });
     }
 
     /*
@@ -50,13 +119,89 @@ export class BotResource {
     * This is a "dummy" implementation that will need to be replaced.
     */
     getBotResponse(data: string): Promise<BotResponse> {
-        const message = 'We are unable to help at this time.';
+        return this.ensureInitialized().then(() => {
+            return new Promise<BotResponse>((resolve) => {
+                this.currentResponse = new BotResponse('match', '').withConfidence(0.9);
+                this.responseResolve = resolve;
+                
+                // Send the user input to OpenAI
+                this.openAIService.sendText(data);
+            });
+        });
+    }
 
-        return this.ttsService.getAudioBytes(message)
-            .then(audioBytes => new BotResponse('match', message)
-                .withConfidence(1.0)
-                .withEndSession(true)
-                .withAudioBytes(audioBytes));
+    /*
+    * Process audio data from the user
+    */
+    processAudio(audioData: Uint8Array): void {
+        if (!this.isInitialized) {
+            this.pendingAudioData.push(audioData);
+            return;
+        }
+
+        // Process any pending audio data first
+        if (this.pendingAudioData.length > 0) {
+            this.pendingAudioData.forEach(data => {
+                this.openAIService.sendAudio(data);
+            });
+            this.pendingAudioData = [];
+        }
+
+        this.openAIService.sendAudio(audioData);
+    }
+
+    /*
+    * Commit the audio buffer to trigger OpenAI processing
+    */
+    commitAudio(): void {
+        if (this.isInitialized) {
+            this.openAIService.commitAudio();
+        }
+    }
+
+    /*
+    * Clear the audio buffer
+    */
+    clearAudio(): void {
+        if (this.isInitialized) {
+            this.openAIService.clearAudioBuffer();
+        }
+    }
+
+    private convertPCM16ToPCMU(pcm16Data: Int16Array): Uint8Array {
+        // PCM16 to PCMU (μ-law) conversion
+        const pcmuData = new Uint8Array(pcm16Data.length);
+        
+        for (let i = 0; i < pcm16Data.length; i++) {
+            let sample = pcm16Data[i];
+            let sign = sample < 0 ? 0x80 : 0x00;
+            if (sample < 0) sample = -sample;
+            
+            sample += 132;
+            if (sample > 32767) sample = 32767;
+            
+            let exponent = 7;
+            for (let exp = 0; exp < 8; exp++) {
+                if (sample <= (33 << exp)) {
+                    exponent = exp;
+                    break;
+                }
+            }
+            
+            let mantissa = (sample >> (exponent + 3)) & 0x0F;
+            pcmuData[i] = sign | (exponent << 4) | mantissa;
+        }
+        
+        return pcmuData;
+    }
+
+    /*
+    * Clean up resources
+    */
+    disconnect(): void {
+        if (this.openAIService) {
+            this.openAIService.disconnect();
+        }
     }
 }
 
