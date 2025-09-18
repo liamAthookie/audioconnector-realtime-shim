@@ -37,6 +37,10 @@ export class OpenAIRealtimeService extends EventEmitter {
         if (this.isConnected) {
             return;
         }
+        
+        if (!this.config.apiKey) {
+            throw new Error('OpenAI API key is required. Please set the OPENAI_API_KEY environment variable.');
+        }
 
         return new Promise((resolve, reject) => {
             const url = 'wss://api.openai.com/v1/realtime?model=' + this.config.model;

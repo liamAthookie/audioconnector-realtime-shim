@@ -20,11 +20,15 @@ export class BotService {
             instructions: 'You are a helpful voice assistant for customer service. Be concise, friendly, and professional.',
             temperature: 0.8
         };
+        
+        if (!this.openAIConfig.apiKey) {
+            console.error('OPENAI_API_KEY environment variable is not set');
+        }
     }
 
     getBotIfExists(connectionUrl: string, inputVariables: JsonStringMap): Promise<BotResource | null> {
         if (!this.openAIConfig.apiKey) {
-            console.error('OpenAI API key not configured');
+            console.error('OpenAI API key not configured. Please set the OPENAI_API_KEY environment variable.');
             return Promise.resolve(null);
         }
         return Promise.resolve(new BotResource(this.openAIConfig));
