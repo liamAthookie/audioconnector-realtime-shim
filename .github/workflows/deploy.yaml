@@ -11,7 +11,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      FLY_APP: your-app-name   # <-- set this
+      FLY_APP: audioconnector-realtime-shim
     steps:
       - uses: actions/checkout@v4
 
