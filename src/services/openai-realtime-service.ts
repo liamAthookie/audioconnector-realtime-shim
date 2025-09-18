@@ -26,7 +26,7 @@ export class OpenAIRealtimeService extends EventEmitter {
     constructor(config: OpenAIRealtimeConfig) {
         super();
         this.config = {
-            model: 'gpt-4o-realtime-preview-2024-10-01',
+            model: 'gpt-4o-realtime-preview-2024-12-17',
             voice: 'alloy',
             temperature: 0.8,
             ...config

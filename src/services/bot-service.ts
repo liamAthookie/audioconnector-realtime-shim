@@ -15,7 +15,7 @@ export class BotService {
     constructor() {
         this.openAIConfig = {
             apiKey: process.env.OPENAI_API_KEY || '',
-            model: 'gpt-4o-realtime-preview-2024-10-01',
+            model: 'gpt-4o-realtime-preview-2024-12-17',
             voice: 'alloy',
             instructions: 'You are a helpful voice assistant for customer service. Be concise, friendly, and professional.',
             temperature: 0.8
