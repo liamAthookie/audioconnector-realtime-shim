@@ -70,15 +70,17 @@ export class BotResource {
 
         this.openAIService.on('audio_response', (audioBuffer: Buffer) => {
             console.log('OpenAI audio response received:', audioBuffer.length, 'bytes');
+            // OpenAI sends G.711 μ-law directly, use as-is
+            const pcmuData = new Uint8Array(audioBuffer);
+            
+            // Send audio immediately when received
+            if (this.audioCallback) {
+                this.audioCallback(pcmuData);
+            }
+            
+            // Also store in current response if available
             if (this.currentResponse) {
-                // OpenAI sends G.711 μ-law directly, use as-is
-                const pcmuData = new Uint8Array(audioBuffer);
                 this.currentResponse.audioBytes = pcmuData;
-                
-                // Send audio immediately when received
-                if (this.audioCallback) {
-                    this.audioCallback(pcmuData);
-                }
             }
         });
 
