@@ -1,22 +1,27 @@
 import WS, { WebSocket } from 'ws';
 import express, { Express, Request } from 'express';
+import { Server as HttpServer } from 'http';
 import { verifyRequestSignature } from '../auth/authenticator';
 import { Session } from '../common/session';
 import { getPort } from '../common/environment-variables';
 import { SecretService } from '../services/secret-service';
 
 export class Server {
-    private app: Express | undefined;
-    private httpServer: any;
+    private httpServer: HttpServer | undefined;
     private wsServer: any;
     private sessionMap: Map<WebSocket, Session> = new Map();
     private secretService = new SecretService();
     
-    start() {
+    start(existingHttpServer?: HttpServer) {
         console.log(`Starting server on port: ${getPort()}`);
 
-        this.app = express();
-        this.httpServer = this.app.listen(getPort());
+        if (existingHttpServer) {
+            this.httpServer = existingHttpServer;
+        } else {
+            const app = express();
+            this.httpServer = app.listen(getPort());
+        }
+        
         this.wsServer = new WebSocket.Server({
             noServer: true
         });
