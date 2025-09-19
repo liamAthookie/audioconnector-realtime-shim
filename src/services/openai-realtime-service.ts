@@ -262,11 +262,6 @@ export class OpenAIRealtimeService extends EventEmitter {
         this.ws.send(JSON.stringify(message));
     }
 
-    // Expose conversion method for use in bot-service
-    convertPCM16ToPCMU(pcm16Data: Int16Array): Uint8Array {
-        return this.convertPCM16ToPCMU(pcm16Data);
-    }
-
     private convertPCMUtoPCM16(pcmuData: Uint8Array): Int16Array {
         // PCMU (μ-law) to PCM16 conversion with lookup table for better accuracy
         const pcm16Data = new Int16Array(pcmuData.length);
@@ -295,7 +290,7 @@ export class OpenAIRealtimeService extends EventEmitter {
         return pcm16Data;
     }
 
-    private convertPCM16ToPCMU(pcm16Data: Int16Array): Uint8Array {
+    convertPCM16ToPCMU(pcm16Data: Int16Array): Uint8Array {
         // PCM16 to PCMU (μ-law) conversion with improved quantization
         const pcmuData = new Uint8Array(pcm16Data.length);
         
