@@ -172,16 +172,6 @@ export class BotResource {
         }
     }
 
-            
-            // Ensure quantized value is in range [0, 15]
-            quantized = Math.max(0, Math.min(15, Math.round(quantized)));
-            
-            pcmuData[i] = sign | (segment << 4) | quantized;
-        }
-        
-        return pcmuData;
-    }
-
     /*
     * Clean up resources
     */
