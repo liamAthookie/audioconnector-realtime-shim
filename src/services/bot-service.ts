@@ -45,10 +45,15 @@ export class BotResource {
     private currentResponse: BotResponse | null = null;
     private responsePromise: Promise<BotResponse> | null = null;
     private responseResolve: ((response: BotResponse) => void) | null = null;
+    private audioCallback: ((audio: Uint8Array) => void) | null = null;
 
     constructor(config: OpenAIRealtimeConfig) {
         this.openAIService = new OpenAIRealtimeService(config);
         this.setupEventHandlers();
+    }
+
+    setAudioCallback(callback: (audio: Uint8Array) => void): void {
+        this.audioCallback = callback;
     }
 
     private setupEventHandlers(): void {
@@ -70,6 +75,11 @@ export class BotResource {
                 const pcm16Data = new Int16Array(audioBuffer.buffer, audioBuffer.byteOffset, audioBuffer.length / 2);
                 const pcmuData = this.openAIService.convertPCM16ToPCMU(pcm16Data);
                 this.currentResponse.audioBytes = pcmuData;
+                
+                // Send audio immediately when received
+                if (this.audioCallback) {
+                    this.audioCallback(pcmuData);
+                }
             }
         });
 

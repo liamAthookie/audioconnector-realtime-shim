@@ -228,6 +228,14 @@ export class Session {
         return this.botService.getBotIfExists(this.url, this.inputVariables)
             .then((selectedBot: BotResource | null) => {
                 this.selectedBot = selectedBot;
+                
+                // Set up audio callback to send audio immediately when received
+                if (this.selectedBot) {
+                    this.selectedBot.setAudioCallback((audio: Uint8Array) => {
+                        this.sendAudio(audio);
+                    });
+                }
+                
                 return this.selectedBot != null;
             });
     }
