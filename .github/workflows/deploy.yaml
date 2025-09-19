@@ -26,7 +26,7 @@ jobs:
           set -e
           if ! flyctl apps list --json | jq -e ".[] | select(.Name==\"$FLY_APP\")" > /dev/null; then
             echo "Creating app $FLY_APP in org $FLY_ORG..."
-            flyctl apps create "$FLY_APP" --org "$FLY_ORG" --region arn
+            flyctl apps create "$FLY_APP" --org "$FLY_ORG"
           else
             echo "App $FLY_APP already exists."
           fi
