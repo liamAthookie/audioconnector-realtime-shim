@@ -29,6 +29,15 @@ export class Server {
         this.httpServer.on('upgrade', (request: Request, socket: any, head: any) => {
             console.log(`Received a connection request from ${request.url}.`);
 
+            // Test endpoint without authentication (DEVELOPMENT ONLY)
+            if (request.url?.includes('/test')) {
+                console.log('Using test endpoint - skipping authentication');
+                this.wsServer.handleUpgrade(request, socket, head, (ws: WebSocket) => {
+                    this.wsServer.emit('connection', ws, request);
+                });
+                return;
+            }
+
             verifyRequestSignature(request, this.secretService)
                 .then(verifyResult => {
                     if (verifyResult.code !== 'VERIFIED') {
