@@ -1,0 +1,14 @@
+{
+  "name": "audioconnector-test-client",
+  "version": "1.0.0",
+  "description": "Test client for AudioConnector server",
+  "main": "test-client.js",
+  "scripts": {
+    "test": "node test-client.js",
+    "test:local": "TEST_SERVER_URL=ws://localhost:8080 node test-client.js",
+    "test:remote": "TEST_SERVER_URL=wss://your-app-name.fly.dev node test-client.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.3"
+  }
+}
