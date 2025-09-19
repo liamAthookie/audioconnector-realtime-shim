@@ -76,8 +76,8 @@ export class BotResource extends EventEmitter {
             // OpenAI sends G.711 μ-law directly, use as-is
             const pcmuData = new Uint8Array(audioBuffer);
             
-            // Send audio immediately when received, but skip initial response if already sent
-            if (this.audioCallback && !(this.currentResponse && !this.hasInitialResponseSent)) {
+            // For initial response, don't send via callback - let the stored response handle it
+            if (this.audioCallback && this.hasInitialResponseSent) {
                 this.audioCallback(pcmuData);
             }
             
@@ -90,6 +90,10 @@ export class BotResource extends EventEmitter {
         this.openAIService.on('response_complete', () => {
             console.log('OpenAI response complete');
             if (this.responseResolve && this.currentResponse) {
+                // Mark initial response as sent after first completion
+                if (!this.hasInitialResponseSent) {
+                    this.hasInitialResponseSent = true;
+                }
                 this.responseResolve(this.currentResponse);
                 this.responseResolve = null;
                 this.currentResponse = null;
@@ -130,7 +134,7 @@ export class BotResource extends EventEmitter {
         return this.ensureInitialized().then(() => {
             // Send initial greeting message to OpenAI
             const initialMessage = "Please greet the user and ask how you can help them today.";
-            this.hasInitialResponseSent = true;
+            this.hasInitialResponseSent = false; // Will be set to true after first response
             return this.getBotResponse(initialMessage);
         });
     }
