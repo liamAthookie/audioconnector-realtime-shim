@@ -90,16 +90,16 @@ export class OpenAIRealtimeService extends EventEmitter {
                 modalities: ['text', 'audio'],
                 instructions: this.config.instructions || 'You are a helpful voice assistant. Be concise and natural in your responses.',
                 voice: this.config.voice,
-                input_audio_format: 'pcm16',
-                output_audio_format: 'pcm16',
+                input_audio_format: 'g711_ulaw',
+                output_audio_format: 'g711_ulaw',
                 input_audio_transcription: {
                     model: 'whisper-1'
                 },
                 turn_detection: {
                     type: 'server_vad',
-                    threshold: 0.6,
-                    prefix_padding_ms: 500,
-                    silence_duration_ms: 800
+                    threshold: 0.5,
+                    prefix_padding_ms: 300,
+                    silence_duration_ms: 500
                 },
                 temperature: this.config.temperature
             }
@@ -145,6 +145,7 @@ export class OpenAIRealtimeService extends EventEmitter {
 
             case 'response.audio.delta':
                 if (message.delta) {
+                    // OpenAI sends G.711 μ-law directly, no conversion needed
                     const audioData = Buffer.from(message.delta, 'base64');
                     this.audioBuffer.push(audioData);
                 }
@@ -192,9 +193,8 @@ export class OpenAIRealtimeService extends EventEmitter {
             return;
         }
 
-        // Convert PCMU to PCM16 if needed
-        const pcm16Data = this.convertPCMUtoPCM16(audioData);
-        const base64Audio = Buffer.from(pcm16Data).toString('base64');
+        // Send PCMU data directly as G.711 μ-law
+        const base64Audio = Buffer.from(audioData).toString('base64');
 
         const message = {
             type: 'input_audio_buffer.append',
@@ -260,74 +260,6 @@ export class OpenAIRealtimeService extends EventEmitter {
         };
 
         this.ws.send(JSON.stringify(message));
-    }
-
-    private convertPCMUtoPCM16(pcmuData: Uint8Array): Int16Array {
-        // PCMU (μ-law) to PCM16 conversion with lookup table for better accuracy
-        const pcm16Data = new Int16Array(pcmuData.length);
-        
-        // μ-law decode lookup table for better performance and accuracy
-        const mulawToPcm = new Int16Array(256);
-        for (let i = 0; i < 256; i++) {
-            const mulaw = i;
-            let sign = (mulaw & 0x80) ? -1 : 1;
-            let exponent = (mulaw & 0x70) >> 4;
-            let mantissa = mulaw & 0x0F;
-            
-            let sample = mantissa << (exponent + 3);
-            if (exponent > 0) {
-                sample += (1 << (exponent + 2));
-            }
-            sample = (sample - 132) * sign;
-            
-            mulawToPcm[i] = Math.max(-32768, Math.min(32767, sample));
-        }
-        
-        for (let i = 0; i < pcmuData.length; i++) {
-            pcm16Data[i] = mulawToPcm[pcmuData[i]];
-        }
-        
-        return pcm16Data;
-    }
-
-    convertPCM16ToPCMU(pcm16Data: Int16Array): Uint8Array {
-        // PCM16 to PCMU (μ-law) conversion with improved quantization
-        const pcmuData = new Uint8Array(pcm16Data.length);
-        
-        // Bias value for μ-law encoding
-        const BIAS = 0x84;
-        const CLIP = 32635;
-        
-        for (let i = 0; i < pcm16Data.length; i++) {
-            let sample = pcm16Data[i];
-            
-            // Get sign and make sample positive
-            const sign = (sample >> 8) & 0x80;
-            if (sign) sample = -sample;
-            
-            // Clip the magnitude
-            if (sample > CLIP) sample = CLIP;
-            
-            // Add bias
-            sample += BIAS;
-            
-            // Find exponent
-            let exponent = 0;
-            if (sample >= 256) {
-                exponent = 1;
-                while (sample >= (512 << exponent) && exponent < 7) {
-                    exponent++;
-                }
-            }
-            
-            // Find mantissa
-            const mantissa = (sample >> (exponent + 3)) & 0x0F;
-            
-            // Combine sign, exponent, and mantissa
-            pcmuData[i] = ~(sign | (exponent << 4) | mantissa);
-        }
-        
-        return pcmuData;
     }
 
     disconnect(): void {

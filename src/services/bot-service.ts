@@ -71,9 +71,8 @@ export class BotResource {
         this.openAIService.on('audio_response', (audioBuffer: Buffer) => {
             console.log('OpenAI audio response received:', audioBuffer.length, 'bytes');
             if (this.currentResponse) {
-                // Convert PCM16 back to PCMU for the AudioConnector client
-                const pcm16Data = new Int16Array(audioBuffer.buffer, audioBuffer.byteOffset, audioBuffer.length / 2);
-                const pcmuData = this.openAIService.convertPCM16ToPCMU(pcm16Data);
+                // OpenAI sends G.711 μ-law directly, use as-is
+                const pcmuData = new Uint8Array(audioBuffer);
                 this.currentResponse.audioBytes = pcmuData;
                 
                 // Send audio immediately when received
