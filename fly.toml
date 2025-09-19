@@ -1,7 +1,6 @@
-[app]
-  primary_region = "arn"
-  app = "audioconnector-realtime-shim"
-
+# fly.toml
+app = "audioconnector-realtime-shim"
+primary_region = "arn"
 
 [build]
 
@@ -17,12 +16,12 @@
   min_machines_running = 0
   processes = ["app"]
 
-[[http_service.checks]]
-  interval = "15s"
-  timeout = "2s"
-  grace_period = "5s"
-  method = "GET"
-  path = "/health"
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "2s"
+    grace_period = "5s"
+    method = "GET"
+    path = "/health"
 
 [processes]
   app = "node dist/index.js"
