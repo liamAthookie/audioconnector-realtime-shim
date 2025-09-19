@@ -1,4 +1,5 @@
 name: Fly Deploy
+
 on:
   push:
     branches: [ "main" ]
@@ -12,15 +13,25 @@ jobs:
     runs-on: ubuntu-latest
     env:
       FLY_APP: audioconnector-realtime-shim
+      FLY_ORG: personal # <-- change this to your Fly.io org slug if not "personal"
     steps:
       - uses: actions/checkout@v4
 
-      # pick ONE of these:
       - uses: superfly/flyctl-actions/setup-flyctl@v1
-      # - uses: superfly/flyctl-actions/setup-flyctl@1.5
-      # - uses: superfly/flyctl-actions/setup-flyctl@master  # per README
+
+      - name: Ensure Fly app exists
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -e
+          if ! flyctl apps list --json | jq -e ".[] | select(.Name==\"$FLY_APP\")" > /dev/null; then
+            echo "Creating app $FLY_APP in org $FLY_ORG..."
+            flyctl apps create "$FLY_APP" --org "$FLY_ORG" --region arn
+          else
+            echo "App $FLY_APP already exists."
+          fi
 
       - name: Deploy
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        run: flyctl deploy --app "${FLY_APP}" --remote-only
+        run: flyctl deploy --remote-only
