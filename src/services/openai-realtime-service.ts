@@ -22,6 +22,11 @@ export class OpenAIRealtimeService extends EventEmitter {
     private isConnected = false;
     private audioBuffer: Buffer[] = [];
     private currentResponseId: string | null = null;
+    private conversationStartTime: number = 0;
+    private maxConversationDuration: number = 300000; // 5 minutes
+    private inactivityTimeout: number = 30000; // 30 seconds
+    private lastActivityTime: number = 0;
+    private timeoutCheckInterval: NodeJS.Timeout | null = null;
 
     constructor(config: OpenAIRealtimeConfig) {
         super();
@@ -55,6 +60,9 @@ export class OpenAIRealtimeService extends EventEmitter {
             this.ws.on('open', () => {
                 console.log('Connected to OpenAI Realtime API');
                 this.isConnected = true;
+                this.conversationStartTime = Date.now();
+                this.lastActivityTime = Date.now();
+                this.startTimeoutCheck();
                 this.initializeSession();
                 resolve();
             });
@@ -79,6 +87,28 @@ export class OpenAIRealtimeService extends EventEmitter {
                 this.isConnected = false;
             });
         });
+    }
+
+    private startTimeoutCheck(): void {
+        this.timeoutCheckInterval = setInterval(() => {
+            const now = Date.now();
+            const conversationDuration = now - this.conversationStartTime;
+            const timeSinceLastActivity = now - this.lastActivityTime;
+
+            // Check for maximum conversation duration
+            if (conversationDuration > this.maxConversationDuration) {
+                console.log('Maximum conversation duration reached, ending session');
+                this.emit('session_timeout', 'max_duration');
+                return;
+            }
+
+            // Check for inactivity timeout
+            if (timeSinceLastActivity > this.inactivityTimeout) {
+                console.log('Inactivity timeout reached, ending session');
+                this.emit('session_timeout', 'inactivity');
+                return;
+            }
+        }, 5000); // Check every 5 seconds
     }
 
     private initializeSession(): void {
@@ -120,17 +150,20 @@ export class OpenAIRealtimeService extends EventEmitter {
 
             case 'input_audio_buffer.speech_started':
                 console.log('Speech started detected by OpenAI');
+                this.lastActivityTime = Date.now();
                 this.emit('speech_started');
                 break;
 
             case 'input_audio_buffer.speech_stopped':
                 console.log('Speech stopped detected by OpenAI');
+                this.lastActivityTime = Date.now();
                 this.emit('speech_stopped');
                 break;
 
             case 'conversation.item.input_audio_transcription.completed':
                 if (message.transcript) {
                     console.log('Transcription:', message.transcript);
+                    this.lastActivityTime = Date.now();
                     this.emit('transcript', {
                         text: message.transcript,
                         confidence: 1.0
@@ -174,6 +207,7 @@ export class OpenAIRealtimeService extends EventEmitter {
             case 'response.done':
                 this.emit('response_complete');
                 this.currentResponseId = null;
+                this.lastActivityTime = Date.now();
                 break;
 
             case 'error':
@@ -263,6 +297,10 @@ export class OpenAIRealtimeService extends EventEmitter {
     }
 
     disconnect(): void {
+        if (this.timeoutCheckInterval) {
+            clearInterval(this.timeoutCheckInterval);
+            this.timeoutCheckInterval = null;
+        }
         if (this.ws) {
             this.ws.close();
             this.ws = null;

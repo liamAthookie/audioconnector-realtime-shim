@@ -234,6 +234,12 @@ export class Session {
                     this.selectedBot.setAudioCallback((audio: Uint8Array) => {
                         this.sendAudio(audio);
                     });
+                    
+                    // Listen for session end events
+                    this.selectedBot.on('session_end', (reason: string) => {
+                        console.log('Bot session ended:', reason);
+                        this.sendDisconnect('completed', `Session ended: ${reason}`, {});
+                    });
                 }
                 
                 return this.selectedBot != null;

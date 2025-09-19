@@ -1,6 +1,7 @@
 import { JsonStringMap } from "../protocol/core";
 import { BotTurnDisposition } from "../protocol/voice-bots";
 import { OpenAIRealtimeService, OpenAIRealtimeConfig } from "./openai-realtime-service";
+import { EventEmitter } from 'events';
 
 /*
 * This class provides support for retreiving a Bot Resource based on the supplied
@@ -38,7 +39,7 @@ export class BotService {
 /*
 * This class provides support for the various methods needed to interact with an Bot.
 */
-export class BotResource {
+export class BotResource extends EventEmitter {
     private openAIService: OpenAIRealtimeService;
     private isInitialized = false;
     private pendingAudioData: Uint8Array[] = [];
@@ -46,8 +47,10 @@ export class BotResource {
     private responsePromise: Promise<BotResponse> | null = null;
     private responseResolve: ((response: BotResponse) => void) | null = null;
     private audioCallback: ((audio: Uint8Array) => void) | null = null;
+    private hasInitialResponseSent = false;
 
     constructor(config: OpenAIRealtimeConfig) {
+        super();
         this.openAIService = new OpenAIRealtimeService(config);
         this.setupEventHandlers();
     }
@@ -73,8 +76,8 @@ export class BotResource {
             // OpenAI sends G.711 μ-law directly, use as-is
             const pcmuData = new Uint8Array(audioBuffer);
             
-            // Send audio immediately when received
-            if (this.audioCallback) {
+            // Send audio immediately when received, but skip initial response if already sent
+            if (this.audioCallback && !(this.currentResponse && !this.hasInitialResponseSent)) {
                 this.audioCallback(pcmuData);
             }
             
@@ -103,6 +106,12 @@ export class BotResource {
                 this.currentResponse = null;
             }
         });
+
+        this.openAIService.on('session_timeout', (reason) => {
+            console.log('Session timeout detected:', reason);
+            // Emit a session end event that the session can handle
+            this.emit('session_end', reason);
+        });
     }
 
     private async ensureInitialized(): Promise<void> {
@@ -121,6 +130,7 @@ export class BotResource {
         return this.ensureInitialized().then(() => {
             // Send initial greeting message to OpenAI
             const initialMessage = "Please greet the user and ask how you can help them today.";
+            this.hasInitialResponseSent = true;
             return this.getBotResponse(initialMessage);
         });
     }
