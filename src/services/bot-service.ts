@@ -68,7 +68,7 @@ export class BotResource {
             if (this.currentResponse) {
                 // Convert PCM16 back to PCMU for the AudioConnector client
                 const pcm16Data = new Int16Array(audioBuffer.buffer, audioBuffer.byteOffset, audioBuffer.length / 2);
-                const pcmuData = this.convertPCM16ToPCMU(pcm16Data);
+                const pcmuData = this.openAIService.convertPCM16ToPCMU(pcm16Data);
                 this.currentResponse.audioBytes = pcmuData;
             }
         });
@@ -172,28 +172,11 @@ export class BotResource {
         }
     }
 
-    private convertPCM16ToPCMU(pcm16Data: Int16Array): Uint8Array {
-        // PCM16 to PCMU (μ-law) conversion
-        const pcmuData = new Uint8Array(pcm16Data.length);
-        
-        for (let i = 0; i < pcm16Data.length; i++) {
-            let sample = pcm16Data[i];
-            let sign = sample < 0 ? 0x80 : 0x00;
-            if (sample < 0) sample = -sample;
             
-            sample += 132;
-            if (sample > 32767) sample = 32767;
+            // Ensure quantized value is in range [0, 15]
+            quantized = Math.max(0, Math.min(15, Math.round(quantized)));
             
-            let exponent = 7;
-            for (let exp = 0; exp < 8; exp++) {
-                if (sample <= (33 << exp)) {
-                    exponent = exp;
-                    break;
-                }
-            }
-            
-            let mantissa = (sample >> (exponent + 3)) & 0x0F;
-            pcmuData[i] = sign | (exponent << 4) | mantissa;
+            pcmuData[i] = sign | (segment << 4) | quantized;
         }
         
         return pcmuData;

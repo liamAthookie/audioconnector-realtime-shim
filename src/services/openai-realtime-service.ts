@@ -97,9 +97,9 @@ export class OpenAIRealtimeService extends EventEmitter {
                 },
                 turn_detection: {
                     type: 'server_vad',
-                    threshold: 0.5,
-                    prefix_padding_ms: 300,
-                    silence_duration_ms: 200
+                    threshold: 0.6,
+                    prefix_padding_ms: 500,
+                    silence_duration_ms: 800
                 },
                 temperature: this.config.temperature
             }
@@ -262,12 +262,19 @@ export class OpenAIRealtimeService extends EventEmitter {
         this.ws.send(JSON.stringify(message));
     }
 
+    // Expose conversion method for use in bot-service
+    convertPCM16ToPCMU(pcm16Data: Int16Array): Uint8Array {
+        return this.convertPCM16ToPCMU(pcm16Data);
+    }
+
     private convertPCMUtoPCM16(pcmuData: Uint8Array): Int16Array {
-        // PCMU (μ-law) to PCM16 conversion
+        // PCMU (μ-law) to PCM16 conversion with lookup table for better accuracy
         const pcm16Data = new Int16Array(pcmuData.length);
         
-        for (let i = 0; i < pcmuData.length; i++) {
-            const mulaw = pcmuData[i];
+        // μ-law decode lookup table for better performance and accuracy
+        const mulawToPcm = new Int16Array(256);
+        for (let i = 0; i < 256; i++) {
+            const mulaw = i;
             let sign = (mulaw & 0x80) ? -1 : 1;
             let exponent = (mulaw & 0x70) >> 4;
             let mantissa = mulaw & 0x0F;
@@ -278,34 +285,51 @@ export class OpenAIRealtimeService extends EventEmitter {
             }
             sample = (sample - 132) * sign;
             
-            pcm16Data[i] = Math.max(-32768, Math.min(32767, sample));
+            mulawToPcm[i] = Math.max(-32768, Math.min(32767, sample));
+        }
+        
+        for (let i = 0; i < pcmuData.length; i++) {
+            pcm16Data[i] = mulawToPcm[pcmuData[i]];
         }
         
         return pcm16Data;
     }
 
     private convertPCM16ToPCMU(pcm16Data: Int16Array): Uint8Array {
-        // PCM16 to PCMU (μ-law) conversion
+        // PCM16 to PCMU (μ-law) conversion with improved quantization
         const pcmuData = new Uint8Array(pcm16Data.length);
+        
+        // Bias value for μ-law encoding
+        const BIAS = 0x84;
+        const CLIP = 32635;
         
         for (let i = 0; i < pcm16Data.length; i++) {
             let sample = pcm16Data[i];
-            let sign = sample < 0 ? 0x80 : 0x00;
-            if (sample < 0) sample = -sample;
             
-            sample += 132;
-            if (sample > 32767) sample = 32767;
+            // Get sign and make sample positive
+            const sign = (sample >> 8) & 0x80;
+            if (sign) sample = -sample;
             
-            let exponent = 7;
-            for (let exp = 0; exp < 8; exp++) {
-                if (sample <= (33 << exp)) {
-                    exponent = exp;
-                    break;
+            // Clip the magnitude
+            if (sample > CLIP) sample = CLIP;
+            
+            // Add bias
+            sample += BIAS;
+            
+            // Find exponent
+            let exponent = 0;
+            if (sample >= 256) {
+                exponent = 1;
+                while (sample >= (512 << exponent) && exponent < 7) {
+                    exponent++;
                 }
             }
             
-            let mantissa = (sample >> (exponent + 3)) & 0x0F;
-            pcmuData[i] = sign | (exponent << 4) | mantissa;
+            // Find mantissa
+            const mantissa = (sample >> (exponent + 3)) & 0x0F;
+            
+            // Combine sign, exponent, and mantissa
+            pcmuData[i] = ~(sign | (exponent << 4) | mantissa);
         }
         
         return pcmuData;
