@@ -1,5 +1,6 @@
 import { WebSocket } from 'ws';
 import { EventEmitter } from 'events';
+import OpenAI from 'openai';
 
 export interface OpenAIRealtimeConfig {
     apiKey: string;
@@ -19,6 +20,7 @@ export interface OpenAIRealtimeResponse {
 export class OpenAIRealtimeService extends EventEmitter {
     private ws: WebSocket | null = null;
     private config: OpenAIRealtimeConfig;
+    private openai: OpenAI;
     private isConnected = false;
     private audioBuffer: Buffer[] = [];
     private currentResponseId: string | null = null;
@@ -27,6 +29,7 @@ export class OpenAIRealtimeService extends EventEmitter {
     private inactivityTimeout: number = 30000; // 30 seconds
     private lastActivityTime: number = 0;
     private timeoutCheckInterval: NodeJS.Timeout | null = null;
+    private pendingModerationCheck = false;
 
     constructor(config: OpenAIRealtimeConfig) {
         super();
@@ -36,6 +39,10 @@ export class OpenAIRealtimeService extends EventEmitter {
             temperature: 0.8,
             ...config
         };
+        
+        this.openai = new OpenAI({
+            apiKey: this.config.apiKey
+        });
     }
 
     async connect(): Promise<void> {
@@ -164,10 +171,28 @@ export class OpenAIRealtimeService extends EventEmitter {
                 if (message.transcript) {
                     console.log('Transcription:', message.transcript);
                     this.lastActivityTime = Date.now();
-                    this.emit('transcript', {
-                        text: message.transcript,
-                        confidence: 1.0
-                    });
+                    
+                    // Check moderation before emitting transcript
+                    this.checkModeration(message.transcript)
+                        .then((isFlagged) => {
+                            if (isFlagged) {
+                                console.log('Content flagged by moderation, sending rejection response');
+                                this.sendModerationRejection();
+                            } else {
+                                this.emit('transcript', {
+                                    text: message.transcript,
+                                    confidence: 1.0
+                                });
+                            }
+                        })
+                        .catch((error) => {
+                            console.error('Moderation check failed:', error);
+                            // Continue with normal flow if moderation fails
+                            this.emit('transcript', {
+                                text: message.transcript,
+                                confidence: 1.0
+                            });
+                        });
                 }
                 break;
 
@@ -219,6 +244,61 @@ export class OpenAIRealtimeService extends EventEmitter {
                 // console.log('Unhandled OpenAI message type:', message.type);
                 break;
         }
+    }
+
+    private async checkModeration(text: string): Promise<boolean> {
+        try {
+            console.log('Checking moderation for text:', text);
+            const moderationResponse = await this.openai.moderations.create({
+                input: text,
+                model: 'omni-moderation-latest'
+            });
+
+            const result = moderationResponse.results[0];
+            const isFlagged = result.flagged;
+            
+            if (isFlagged) {
+                console.log('Content flagged by moderation:', result.categories);
+            }
+            
+            return isFlagged;
+        } catch (error) {
+            console.error('Error calling moderation API:', error);
+            // Return false to allow content through if moderation fails
+            return false;
+        }
+    }
+
+    private sendModerationRejection(): void {
+        if (!this.ws || !this.isConnected) return;
+
+        // Create a conversation item with the rejection message
+        const rejectionMessage = {
+            type: 'conversation.item.create',
+            item: {
+                type: 'message',
+                role: 'assistant',
+                content: [
+                    {
+                        type: 'text',
+                        text: "I'm sorry, I cannot help you with that request."
+                    }
+                ]
+            }
+        };
+
+        this.ws.send(JSON.stringify(rejectionMessage));
+        
+        // Create a response to generate audio for the rejection
+        const responseMessage = {
+            type: 'response.create',
+            response: {
+                modalities: ['text', 'audio'],
+                instructions: 'Please respond with the exact text provided without modification.'
+            }
+        };
+
+        this.ws.send(JSON.stringify(responseMessage));
     }
 
     sendAudio(audioData: Uint8Array): void {
