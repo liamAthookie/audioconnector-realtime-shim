@@ -256,6 +256,10 @@ export class Session {
     processBotStart() {
         if (!this.selectedBot) {
             return;
+        }
+
+        this.selectedBot.getBotResponse('')
+            .then((response: BotResponse) => {
                 // Send initial greeting message to OpenAI to generate welcome response
                 const greetingMessage = {
                     type: 'conversation.item.create',
@@ -283,7 +287,7 @@ export class Session {
                 };
 
                 this.openAIService.ws.send(JSON.stringify(responseMessage));
-            .then((response: BotResponse) => {
+                
                 // Bot is now ready and initialized
                 // No initial greeting will be sent - wait for user to speak first
                 console.log('Bot initialized and ready for user input');
@@ -440,4 +444,4 @@ export class Session {
             this.selectedBot.disconnect();
         }
     }
-};
+}
