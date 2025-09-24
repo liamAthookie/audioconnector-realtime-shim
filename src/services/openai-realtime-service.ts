@@ -53,6 +53,10 @@ export class OpenAIRealtimeService extends EventEmitter {
         });
     }
 
+    get isConnected(): boolean {
+        return this.isConnected;
+    }
+
     async connect(): Promise<void> {
         if (this.isConnected) {
             return;

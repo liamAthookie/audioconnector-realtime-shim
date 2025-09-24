@@ -170,33 +170,36 @@ export class Session {
         };
         const message = this.createMessage('event', {
             entities: [bargeInEvent]
-        } as SelectParametersForType<'event', EventParameters>);
+        // Send a system message to set context and then generate initial greeting
+        if (this.openAIService.ws && this.openAIService.isConnected) {
+            // Add system context
+            const systemMessage = {
+                type: 'conversation.item.create',
+                item: {
+                    type: 'message',
+                    role: 'system',
+                    content: [
+                        {
+                            type: 'text',
+                            text: 'You are a helpful customer service assistant. Start the conversation with a brief, friendly greeting and ask how you can help today.'
+                        }
+                    ]
+                }
+            };
 
-        this.send(message);
-    }
+            this.openAIService.ws.send(JSON.stringify(systemMessage));
+            
+            // Create response to generate the greeting
+            const responseMessage = {
+                type: 'response.create',
+                response: {
+                    modalities: ['text', 'audio'],
+                    instructions: 'Provide a brief, friendly greeting and ask how you can help the customer today.'
+                }
+            };
 
-    sendTurnResponse(disposition: BotTurnDisposition, text: string | undefined, confidence: number | undefined) {
-        const botTurnResponseEvent: EventEntityBotTurnResponse = {
-            type: 'bot_turn_response',
-            data: {
-                disposition,
-                text,
-                confidence
-            }
-        };
-        const message = this.createMessage('event', {
-            entities: [botTurnResponseEvent]
-        } as SelectParametersForType<'event', EventParameters>);
-
-        this.send(message);
-    }
-
-    sendDisconnect(reason: DisconnectReason, info: string, outputVariables: JsonStringMap) {
-        this.disconnecting = true;
-        
-        const disconnectParameters: DisconnectParameters = {
-            reason,
-            info,
+            text: 'Hello! How can I help you today?',
+        }
             outputVariables
         };
         const message = this.createMessage('disconnect', disconnectParameters);
