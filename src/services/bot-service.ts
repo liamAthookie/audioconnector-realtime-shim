@@ -1,445 +1,208 @@
-import { v4 as uuid } from 'uuid';
-import { WebSocket } from 'ws';
-import {
-    JsonStringMap,
-    MediaParameter
-} from '../protocol/core';
-import {
-    ClientMessage,
-    DisconnectParameters,
-    DisconnectReason,
-    EventParameters,
-    SelectParametersForType,
-    ServerMessage,
-    ServerMessageBase,
-    ServerMessageType
-} from '../protocol/message';
-import {
-    BotTurnDisposition,
-    EventEntityBargeIn,
-    EventEntityBotTurnResponse
-} from '../protocol/voice-bots';
-import { MessageHandlerRegistry } from '../websocket/message-handlers/message-handler-registry';
-import {
-    BotService,
-    BotResource,
-    BotResponse
-} from '../services/bot-service';
-import {
-    ASRService,
-    Transcript
-} from '../services/asr-service';
-import { DTMFService } from '../services/dtmf-service';
+import { EventEmitter } from 'events';
+import { JsonStringMap } from '../protocol/core';
+import { BotTurnDisposition } from '../protocol/voice-bots';
+import { TTSService } from './tts-service';
+import { OpenAIRealtimeService, OpenAIRealtimeConfig } from './openai-realtime-service';
 
-export class Session {
-    private MAXIMUM_BINARY_MESSAGE_SIZE = 64000;
-    private disconnecting = false;
-    private closed = false;
-    private ws;
+export interface BotResponse {
+    disposition: BotTurnDisposition;
+    text?: string;
+    confidence?: number;
+    audioBytes?: Uint8Array;
+    endSession?: boolean;
+}
 
-    private messageHandlerRegistry = new MessageHandlerRegistry();
-    private botService = new BotService();
-    private asrService: ASRService | null = null;
-    private dtmfService: DTMFService | null = null;
-    private url;
-    private clientSessionId;
-    private conversationId: string | undefined;
-    private lastServerSequenceNumber = 0;
-    private lastClientSequenceNumber = 0;
-    private inputVariables: JsonStringMap = {};
-    private selectedMedia: MediaParameter | undefined;
-    private selectedBot: BotResource | null = null;
-    private isCapturingDTMF = false;
-    private isAudioPlaying = false;
-    private audioProcessingMode: 'asr' | 'realtime' = 'realtime';
+export class BotResource extends EventEmitter {
+    private openAIService: OpenAIRealtimeService;
+    private ttsService = new TTSService();
+    private audioCallback: ((audio: Uint8Array) => void) | null = null;
+    private isInitialized = false;
 
-    constructor(ws: WebSocket, sessionId: string, url: string) {
-        this.ws = ws;
-        this.clientSessionId = sessionId;
-        this.url = url;
+    constructor(private botId: string, private config: any) {
+        super();
+        
+        const openAIConfig: OpenAIRealtimeConfig = {
+            apiKey: process.env.OPENAI_API_KEY || '',
+            voice: 'alloy',
+            instructions: 'You are a helpful customer service assistant. Be concise, friendly, and professional in your responses. Keep responses brief and to the point.',
+            temperature: 0.7
+        };
+
+        this.openAIService = new OpenAIRealtimeService(openAIConfig);
+        this.setupOpenAIEventHandlers();
     }
 
-    close() {
-        if (this.closed) {
+    private setupOpenAIEventHandlers(): void {
+        this.openAIService.on('audio_response', (audioData: Uint8Array) => {
+            console.log('Received audio response from OpenAI, sending to client');
+            if (this.audioCallback) {
+                this.audioCallback(audioData);
+            }
+        });
+
+        this.openAIService.on('text_response', (text: string) => {
+            console.log('Received text response from OpenAI:', text);
+            // Text responses are handled via the audio callback mechanism
+        });
+
+        this.openAIService.on('transcript', (transcript: { text: string; confidence: number }) => {
+            console.log('User transcript:', transcript.text);
+        });
+
+        this.openAIService.on('speech_started', () => {
+            console.log('User started speaking');
+        });
+
+        this.openAI.on('speech_stopped', () => {
+            console.log('User stopped speaking');
+        });
+
+        this.openAIService.on('session_timeout', (reason: string) => {
+            console.log('Session timeout:', reason);
+            this.emit('session_end', reason);
+        });
+
+        this.openAIService.on('error', (error: any) => {
+            console.error('OpenAI Realtime API error:', error);
+            this.emit('session_end', 'error');
+        });
+    }
+
+    async initialize(): Promise<void> {
+        if (this.isInitialized) {
             return;
         }
 
         try {
-            this.ws.close();
-        } catch {
-        }
-
-        this.closed = true;
-    }
-
-    setConversationId(conversationId: string) {
-        this.conversationId = conversationId;
-    }
-
-    setInputVariables(inputVariables: JsonStringMap) { this.inputVariables = inputVariables; }
-
-    setSelectedMedia(selectedMedia: MediaParameter) { this.selectedMedia = selectedMedia; }
-
-    setIsAudioPlaying(isAudioPlaying: boolean) { this.isAudioPlaying = isAudioPlaying; }
-
-    processTextMessage(data: string) {
-        if (this.closed) {
-            return;
-        }
-
-        const message = JSON.parse(data);
-
-        if (message.seq !== this.lastClientSequenceNumber + 1) {
-            console.log(`Invalid client sequence number: ${message.seq}.`);
-            this.sendDisconnect('error', 'Invalid client sequence number.', {});
-            return;
-        }
-
-        this.lastClientSequenceNumber = message.seq;
-
-        if (message.serverseq > this.lastServerSequenceNumber) {
-            console.log(`Invalid server sequence number: ${message.serverseq}.`);
-            this.sendDisconnect('error', 'Invalid server sequence number.', {});
-            return;
-        }
-
-        if (message.id !== this.clientSessionId) {
-            console.log(`Invalid Client Session ID: ${message.id}.`);
-            this.sendDisconnect('error', 'Invalid ID specified.', {});
-            return;
-        }
-
-        const handler = this.messageHandlerRegistry.getHandler(message.type);
-
-        if (!handler) {
-            console.log(`Cannot find a message handler for '${message.type}'.`);
-            return;
-        }
-
-        handler.handleMessage(message as ClientMessage, this);
-    }
-
-    createMessage<Type extends ServerMessageType, Message extends ServerMessage>(type: Type, parameters: SelectParametersForType<Type, Message>): ServerMessage {
-        const message: ServerMessageBase<Type, typeof parameters> = {
-            id: this.clientSessionId as string,
-            version: '2',
-            seq: ++this.lastServerSequenceNumber,
-            clientseq: this.lastClientSequenceNumber,
-            type,
-            parameters
-        };
-    
-        return message as ServerMessage;
-    }
-
-    send(message: ServerMessage) {
-        if (message.type === 'event') {
-            console.log(`Sending an ${message.type} message: ${message.parameters.entities[0].type}.`);
-        } else {
-            console.log(`Sending a ${message.type} message.`);
-        }
-        
-        this.ws.send(JSON.stringify(message));
-    }
-
-    sendAudio(bytes: Uint8Array) {
-        console.log(`Preparing to send ${bytes.length} bytes of audio`);
-        if (bytes.length <= this.MAXIMUM_BINARY_MESSAGE_SIZE) {
-            console.log(`Sending ${bytes.length} binary bytes in 1 message.`);
-            this.ws.send(bytes, { binary: true });
-        } else {
-            let currentPosition = 0;
-            let chunkCount = 0;
-
-            while (currentPosition < bytes.length) {
-                const sendBytes = bytes.slice(currentPosition, currentPosition + this.MAXIMUM_BINARY_MESSAGE_SIZE);
-
-                chunkCount++;
-                console.log(`Sending ${sendBytes.length} binary bytes in chunk ${chunkCount}.`);
-                this.ws.send(sendBytes, { binary: true });
-                currentPosition += this.MAXIMUM_BINARY_MESSAGE_SIZE;
-            }
-            console.log(`Completed sending audio in ${chunkCount} chunks`);
+            await this.openAIService.connect();
+            this.isInitialized = true;
+            console.log('Bot resource initialized successfully');
+        } catch (error) {
+            console.error('Failed to initialize bot resource:', error);
+            throw error;
         }
     }
 
-    sendBargeIn() {
-        const bargeInEvent: EventEntityBargeIn = {
-            type: 'barge_in',
-            data: {}
-        };
-        const message = this.createMessage('event', {
-            entities: [bargeInEvent]
-        });
-        this.send(message);
+    setAudioCallback(callback: (audio: Uint8Array) => void): void {
+        this.audioCallback = callback;
     }
 
-    sendTurnResponse(disposition: BotTurnDisposition, text: string, confidence: number) {
-        const turnResponseEvent: EventEntityBotTurnResponse = {
-            type: 'bot_turn_response',
-            data: {
-                disposition,
-                confidence,
-                text: text
-            }
-        };
-        const message = this.createMessage('event', {
-            entities: [turnResponseEvent]
-        });
-        this.send(message);
-    }
+    async getInitialResponse(): Promise<BotResponse> {
+        if (!this.isInitialized) {
+            await this.initialize();
+        }
 
-    sendDisconnect(reason: DisconnectReason, message: string, outputVariables: JsonStringMap) {
-        this.disconnecting = true;
-
-        const disconnectParameters: DisconnectParameters = {
-            reason,
-            message,
-            outputVariables
-        };
-        const message2 = this.createMessage('disconnect', disconnectParameters);
-
-        this.send(message2);
-    }
-
-    sendClosed() {
-        const message = this.createMessage('closed', {});
-        this.send(message);
-    }
-
-    /*
-    * This method is using during the open process to validate that the information supplied points
-    * to a valid Bot Resource. There are a two places that can be looked at to get the required
-    * information to locate a Bot Resource: The connection URL, and Input Variables.
-    * 
-    * In the connectionId field for an AudioConnector Bot in an Inbound Call Flow is where Bot information
-    * can be added. The baseUri property on the AudioConnector Integration is appened with the connectionId
-    * field, to form the end-result connection URL. Identifying Bot information can be in the form of URL
-    * path parts and/or Query String values. You may also use Input Variables to provide further customization
-    * if necessary.
-    * 
-    * This part has a "dummy" implementation that will need to be replaced with an actual implementation.
-    * 
-    * See `bot-service` in the `services` folder for more information.
-    */
-    checkIfBotExists(): Promise<boolean> {
-        return this.botService.getBotIfExists(this.url, this.inputVariables)
-            .then((selectedBot: BotResource | null) => {
-                this.selectedBot = selectedBot;
-                
-                // Set up audio callback to send audio immediately when received
-                if (this.selectedBot) {
-                    this.selectedBot.setAudioCallback((audio: Uint8Array) => {
-                        this.sendAudio(audio);
-                    });
-                    
-                    // Listen for session end events
-                    this.selectedBot.on('session_end', (reason: string) => {
-                        console.log('Bot session ended:', reason);
-                        this.sendDisconnect('completed', `Session ended: ${reason}`, {});
-                    });
+        // Send initial greeting request to OpenAI
+        if (this.openAIService.isConnected) {
+            // Create a system message to set up the greeting context
+            const greetingMessage = {
+                type: 'conversation.item.create',
+                item: {
+                    type: 'message',
+                    role: 'system',
+                    content: [
+                        {
+                            type: 'text',
+                            text: 'Please provide a brief, friendly greeting to welcome the customer to our customer service. Keep it concise and professional, around 1-2 sentences.'
+                        }
+                    ]
                 }
-                
-                return this.selectedBot != null;
-            });
+            };
+
+            this.openAIService.ws?.send(JSON.stringify(greetingMessage));
+            
+            // Create response to generate the greeting
+            const responseMessage = {
+                type: 'response.create',
+                response: {
+                    modalities: ['text', 'audio'],
+                    instructions: 'Provide a brief, friendly greeting to welcome the customer to our customer service.'
+                }
+            };
+
+            this.openAIService.ws?.send(JSON.stringify(responseMessage));
+        }
+
+        return {
+            disposition: 'match',
+            text: 'Hello! Welcome to our customer service. How can I help you today?',
+            confidence: 1.0
+        };
     }
 
-    /*
-    * This method is used to provide the initial response from the Bot to the Client.
-    *
-    * This part has a "dummy" implementation that will need to be replaced with an actual implementation.
-    *
-    * See `bot-service` in the `services` folder for more information.
-    */
-    processBotStart() {
-        if (!this.selectedBot) {
-            return;
+    async getBotResponse(input: string): Promise<BotResponse> {
+        if (!this.isInitialized) {
+            await this.initialize();
         }
 
-        this.selectedBot.getBotResponse('')
-            .then((response: BotResponse) => {
-                // Send initial greeting message to OpenAI to generate welcome response
-                const greetingMessage = {
-                    type: 'conversation.item.create',
-                    item: {
-                        type: 'message',
-                        role: 'system',
-                        content: [
-                            {
-                                type: 'text',
-                                text: 'Please provide a brief, friendly greeting to welcome the customer to our service. Keep it concise and professional.'
-                            }
-                        ]
-                    }
-                };
+        if (!input.trim()) {
+            return {
+                disposition: 'no_input',
+                text: 'I didn\'t hear anything. Could you please repeat that?',
+                confidence: 0.5
+            };
+        }
 
-                // this.openAIService.ws.send(JSON.stringify(greetingMessage));
-                
-                // Create response to generate the greeting
-                const responseMessage = {
-                    type: 'response.create',
-                    response: {
-                        modalities: ['text', 'audio'],
-                        instructions: 'Provide a brief, friendly greeting to welcome the customer.'
-                    }
-                };
+        try {
+            // For text input (like DTMF), send it to OpenAI
+            if (this.openAIService.isConnected) {
+                this.openAIService.sendText(input);
+            }
 
-                // this.openAIService.ws.send(JSON.stringify(responseMessage));
-                
-                // Bot is now ready and initialized
-                // No initial greeting will be sent - wait for user to speak first
-                console.log('Bot initialized and ready for user input');
-            })
-            .catch((error) => {
-                console.error('Error getting initial bot response:', error);
-                this.sendDisconnect('error', 'Failed to initialize bot', {});
-            });
+            // Return a basic response - the actual audio will come through the callback
+            return {
+                disposition: 'match',
+                text: 'Processing your request...',
+                confidence: 1.0
+            };
+        } catch (error) {
+            console.error('Error getting bot response:', error);
+            
+            // Fallback to TTS if OpenAI fails
+            const fallbackText = 'I apologize, but I\'m having trouble processing your request right now. Please try again.';
+            const audioBytes = await this.ttsService.getAudioBytes(fallbackText);
+            
+            return {
+                disposition: 'no_match',
+                text: fallbackText,
+                confidence: 0.5,
+                audioBytes
+            };
+        }
     }
 
-    /*
-    * This method is used to process the incoming audio data from the Client.
-    * This part has a "dummy" implementation that will need to be replaced
-    * with a proper ASR engine.
-    * 
-    * See `asr-service` in the `services` folder for more information.
-    */
-    processBinaryMessage(data: Uint8Array) {
-        if (this.disconnecting || this.closed || !this.selectedBot) {
+    processAudio(audioData: Uint8Array): void {
+        if (!this.isInitialized || !this.openAIService.isConnected) {
+            console.warn('Bot not initialized or OpenAI not connected');
             return;
         }
 
-        // Ignore audio if we are capturing DTMF
-        if (this.isCapturingDTMF) {
-            return;
-        }
-
-        // Use OpenAI Realtime API for audio processing
-        if (this.audioProcessingMode === 'realtime') {
-            this.selectedBot.processAudio(data);
-            return;
-        }
-
-        // Fallback to traditional ASR processing
-        /*
-        * For this implementation, we are going to ignore input while there
-        * is audio playing. You may choose to continue to process audio if
-        * you want to enable support for Barge-In scenarios.
-        */
-        if (this.isAudioPlaying) {
-            this.asrService = null;
-            this.dtmfService = null;
-            return;
-        }
-
-        if (!this.asrService || this.asrService.getState() === 'Complete') {
-            this.asrService = new ASRService()
-                .on('error', (error: any) => {
-                    if (this.isCapturingDTMF) {
-                        return;
-                    }
-                    
-                    const message = 'Error during Speech Recognition.';
-                    console.log(`${message}: ${error}`);
-                    this.sendDisconnect('error', message, {});
-                })
-                .on('final-transcript', (transcript: Transcript) => {
-                    if (this.isCapturingDTMF) {
-                        return;
-                    }
-                    
-                    this.selectedBot?.getBotResponse(transcript.text)
-                        .then((response: BotResponse) => {
-                            if (response.text) {
-                                this.sendTurnResponse(response.disposition, response.text, response.confidence);
-                            }
-
-                            if (response.audioBytes) {
-                                this.sendAudio(response.audioBytes);
-                            }
-
-                            if (response.endSession) {
-                                this.sendDisconnect('completed', '', {});
-                            }
-                        })
-                        .catch((error) => {
-                            console.error('Error getting bot response:', error);
-                            this.sendDisconnect('error', 'Bot processing error', {});
-                        });
-                });
-        }
-        this.asrService.processAudio(data);
+        // Send audio directly to OpenAI Realtime API
+        this.openAIService.sendAudio(audioData);
     }
 
-    /*
-    * This method is used to process the incoming DTMF digits from the Client.
-    * This part has a "dummy" implementation that will need to be replaced
-    * with proper logic.
-    * 
-    * See `dtmf-service` in the `services` folder for more information.
-    */
-    processDTMF(digit: string) {
-        if (this.disconnecting || this.closed || !this.selectedBot) {
-            return;
+    disconnect(): void {
+        if (this.openAIService) {
+            this.openAIService.disconnect();
         }
-
-        /*
-        * For this implementation, we are going to ignore input while there
-        * is audio playing. You may choose to continue to process DTMF if
-        * you want to enable support for Barge-In scenarios.
-        */
-        if (this.isAudioPlaying) {
-            this.asrService = null;
-            this.dtmfService = null;
-            return;
-        }
-
-        // If we are capturing DTMF, flag it so we stop capturing audio,
-        // and close down the audio capturing.
-        if (!this.isCapturingDTMF) {
-            this.isCapturingDTMF = true;
-            this.asrService = null;
-        }
-
-        if (!this.dtmfService || this.dtmfService.getState() === 'Complete') {
-            this.dtmfService = new DTMFService()
-                .on('error', (error: any) => {
-                    const message = 'Error during DTMF Capture.';
-                    console.log(`${message}: ${error}`);
-                    this.sendDisconnect('error', message, {});
-                })
-                .on('final-digits', (digits) => {
-                    this.selectedBot?.getBotResponse(digits)
-                        .then((response: BotResponse) => {
-                            if (response.text) {
-                                this.sendTurnResponse(response.disposition, response.text, response.confidence);
-                            }
-
-                            if (response.audioBytes) {
-                                this.sendAudio(response.audioBytes);
-                            }
-
-                            if (response.endSession) {
-                                this.sendDisconnect('completed', '', {});
-                            }
-
-                            this.isCapturingDTMF = false;
-                        })
-                        .catch((error) => {
-                            console.error('Error processing DTMF:', error);
-                            this.sendDisconnect('error', 'DTMF processing error', {});
-                        });
-                });
-        }
-
-        this.dtmfService.processDigit(digit);
+        this.isInitialized = false;
     }
+}
 
-    /*
-    * Clean up session resources
-    */
-    cleanup(): void {
-        if (this.selectedBot) {
-            this.selectedBot.disconnect();
-        }
+export class BotService {
+    getBotIfExists(url: string | undefined, inputVariables: JsonStringMap): Promise<BotResource | null> {
+        console.log(`Looking up Bot Resource for URL: ${url}`);
+        console.log(`Input Variables: ${JSON.stringify(inputVariables)}`);
+
+        // For this implementation, we'll always return a bot resource
+        // In a real implementation, you would validate the URL and input variables
+        // to determine if a valid bot exists
+        
+        const botResource = new BotResource('default-bot', {
+            url,
+            inputVariables
+        });
+
+        return Promise.resolve(botResource);
     }
 }
