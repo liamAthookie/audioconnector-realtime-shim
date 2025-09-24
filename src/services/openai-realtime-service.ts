@@ -35,6 +35,10 @@ export class OpenAIRealtimeService extends EventEmitter {
     private lastUserSpeechTime: number = 0;
     private responseDebounceTimeout: NodeJS.Timeout | null = null;
 
+    // Expose ws for direct access when needed
+    get ws() {
+        return this.ws;
+    }
     constructor(config: OpenAIRealtimeConfig) {
         super();
         this.config = {

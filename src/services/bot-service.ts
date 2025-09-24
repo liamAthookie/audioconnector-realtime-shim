@@ -132,9 +132,38 @@ export class BotResource extends EventEmitter {
     */
     getInitialResponse(): Promise<BotResponse> {
         return this.ensureInitialized().then(() => {
-            // Return a simple response to indicate the bot is ready
-            // The actual greeting will be handled by the first user interaction
-            return Promise.resolve(new BotResponse('match', 'Bot is ready').withConfidence(1.0));
+            return new Promise<BotResponse>((resolve) => {
+                this.currentResponse = new BotResponse('match', '').withConfidence(1.0);
+                this.responseResolve = resolve;
+                
+                // Send initial greeting message to OpenAI to generate welcome response
+                const greetingMessage = {
+                    type: 'conversation.item.create',
+                    item: {
+                        type: 'message',
+                        role: 'system',
+                        content: [
+                            {
+                                type: 'text',
+                                text: 'Please provide a brief, friendly greeting to welcome the customer to our service. Keep it concise and professional.'
+                            }
+                        ]
+                    }
+                };
+
+                this.openAIService.ws.send(JSON.stringify(greetingMessage));
+                
+                // Create response to generate the greeting
+                const responseMessage = {
+                    type: 'response.create',
+                    response: {
+                        modalities: ['text', 'audio'],
+                        instructions: 'Provide a brief, friendly greeting to welcome the customer.'
+                    }
+                };
+
+                this.openAIService.ws.send(JSON.stringify(responseMessage));
+            });
         });
     }
 
