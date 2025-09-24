@@ -170,41 +170,36 @@ export class Session {
         };
         const message = this.createMessage('event', {
             entities: [bargeInEvent]
-        // Send a system message to set context and then generate initial greeting
-        if (this.openAIService.ws && this.openAIService.isConnected) {
-            // Add system context
-            const systemMessage = {
-                type: 'conversation.item.create',
-                item: {
-                    type: 'message',
-                    role: 'system',
-                    content: [
-                        {
-                            type: 'text',
-                            text: 'You are a helpful customer service assistant. Start the conversation with a brief, friendly greeting and ask how you can help today.'
-                        }
-                    ]
-                }
-            };
+        });
+        this.send(message);
+    }
 
-            this.openAIService.ws.send(JSON.stringify(systemMessage));
-            
-            // Create response to generate the greeting
-            const responseMessage = {
-                type: 'response.create',
-                response: {
-                    modalities: ['text', 'audio'],
-                    instructions: 'Provide a brief, friendly greeting and ask how you can help the customer today.'
-                }
-            };
+    sendTurnResponse(disposition: BotTurnDisposition, text: string, confidence: number) {
+        const turnResponseEvent: EventEntityBotTurnResponse = {
+            type: 'bot_turn_response',
+            data: {
+                disposition,
+                confidence,
+                text: text
+            }
+        };
+        const message = this.createMessage('event', {
+            entities: [turnResponseEvent]
+        });
+        this.send(message);
+    }
 
-            text: 'Hello! How can I help you today?',
-        }
+    sendDisconnect(reason: DisconnectReason, message: string, outputVariables: JsonStringMap) {
+        this.disconnecting = true;
+
+        const disconnectParameters: DisconnectParameters = {
+            reason,
+            message,
             outputVariables
         };
-        const message = this.createMessage('disconnect', disconnectParameters);
+        const message2 = this.createMessage('disconnect', disconnectParameters);
 
-        this.send(message);
+        this.send(message2);
     }
 
     sendClosed() {
@@ -278,7 +273,7 @@ export class Session {
                     }
                 };
 
-                this.openAIService.ws.send(JSON.stringify(greetingMessage));
+                // this.openAIService.ws.send(JSON.stringify(greetingMessage));
                 
                 // Create response to generate the greeting
                 const responseMessage = {
@@ -289,7 +284,7 @@ export class Session {
                     }
                 };
 
-                this.openAIService.ws.send(JSON.stringify(responseMessage));
+                // this.openAIService.ws.send(JSON.stringify(responseMessage));
                 
                 // Bot is now ready and initialized
                 // No initial greeting will be sent - wait for user to speak first
