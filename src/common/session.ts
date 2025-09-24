@@ -260,13 +260,9 @@ export class Session {
 
         this.selectedBot.getInitialResponse()
             .then((response: BotResponse) => {
-                if (response.text) {
-                    this.sendTurnResponse(response.disposition, response.text, response.confidence);
-                }
-
-                if (response.audioBytes) {
-                    this.sendAudio(response.audioBytes);
-                }
+                // Bot is now ready and initialized
+                // No initial greeting will be sent - wait for user to speak first
+                console.log('Bot initialized and ready for user input');
             })
             .catch((error) => {
                 console.error('Error getting initial bot response:', error);
