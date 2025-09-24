@@ -102,7 +102,7 @@ export class BotResource extends EventEmitter {
                     role: 'system',
                     content: [
                         {
-                            type: 'text',
+                            type: 'input_text',
                             text: 'Please provide a brief, friendly greeting to welcome the customer to our customer service. Keep it concise and professional, around 1-2 sentences.'
                         }
                     ]
