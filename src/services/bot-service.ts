@@ -53,7 +53,7 @@ export class BotResource extends EventEmitter {
             console.log('User started speaking');
         });
 
-        this.openAI.on('speech_stopped', () => {
+        this.openAIService.on('speech_stopped', () => {
             console.log('User stopped speaking');
         });
 

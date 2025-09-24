@@ -18,10 +18,10 @@ export interface OpenAIRealtimeResponse {
 }
 
 export class OpenAIRealtimeService extends EventEmitter {
-    private ws: WebSocket | null = null;
     private config: OpenAIRealtimeConfig;
     private openai: OpenAI;
-    private isConnected = false;
+    private _ws: WebSocket | null = null;
+    private _isConnected = false;
     private audioBuffer: Buffer[] = [];
     private currentResponseId: string | null = null;
     private isGeneratingResponse = false;
@@ -35,10 +35,15 @@ export class OpenAIRealtimeService extends EventEmitter {
     private lastUserSpeechTime: number = 0;
     private responseDebounceTimeout: NodeJS.Timeout | null = null;
 
-    // Expose ws for direct access when needed
-    get ws() {
-        return this.ws;
+    // Public getters for accessing private properties
+    get ws(): WebSocket | null {
+        return this._ws;
     }
+    
+    get isConnected(): boolean {
+        return this._isConnected;
+    }
+
     constructor(config: OpenAIRealtimeConfig) {
         super();
         this.config = {
@@ -53,10 +58,6 @@ export class OpenAIRealtimeService extends EventEmitter {
         });
     }
 
-    get isConnected(): boolean {
-        return this.isConnected;
-    }
-
     async connect(): Promise<void> {
         if (this.isConnected) {
             return;
@@ -69,16 +70,16 @@ export class OpenAIRealtimeService extends EventEmitter {
         return new Promise((resolve, reject) => {
             const url = 'wss://api.openai.com/v1/realtime?model=' + this.config.model;
             
-            this.ws = new WebSocket(url, {
+            this._ws = new WebSocket(url, {
                 headers: {
                     'Authorization': `Bearer ${this.config.apiKey}`,
                     'OpenAI-Beta': 'realtime=v1'
                 }
             });
 
-            this.ws.on('open', () => {
+            this._ws.on('open', () => {
                 console.log('Connected to OpenAI Realtime API');
-                this.isConnected = true;
+                this._isConnected = true;
                 this.conversationStartTime = Date.now();
                 this.lastActivityTime = Date.now();
                 this.startTimeoutCheck();
@@ -86,7 +87,7 @@ export class OpenAIRealtimeService extends EventEmitter {
                 resolve();
             });
 
-            this.ws.on('message', (data: Buffer) => {
+            this._ws.on('message', (data: Buffer) => {
                 try {
                     const message = JSON.parse(data.toString());
                     this.handleMessage(message);
@@ -95,15 +96,15 @@ export class OpenAIRealtimeService extends EventEmitter {
                 }
             });
 
-            this.ws.on('error', (error) => {
+            this._ws.on('error', (error) => {
                 console.error('OpenAI WebSocket error:', error);
-                this.isConnected = false;
+                this._isConnected = false;
                 reject(error);
             });
 
-            this.ws.on('close', () => {
+            this._ws.on('close', () => {
                 console.log('OpenAI WebSocket connection closed');
-                this.isConnected = false;
+                this._isConnected = false;
             });
         });
     }
@@ -131,7 +132,7 @@ export class OpenAIRealtimeService extends EventEmitter {
     }
 
     private initializeSession(): void {
-        if (!this.ws) return;
+        if (!this._ws) return;
 
         const sessionUpdate = {
             type: 'session.update',
@@ -154,7 +155,7 @@ export class OpenAIRealtimeService extends EventEmitter {
             }
         };
 
-        this.ws.send(JSON.stringify(sessionUpdate));
+        this._ws.send(JSON.stringify(sessionUpdate));
     }
 
     private handleMessage(message: any): void {
@@ -360,7 +361,7 @@ export class OpenAIRealtimeService extends EventEmitter {
     }
 
     private cancelCurrentResponse(): void {
-        if (!this.ws || !this.isConnected || !this.currentResponseId) return;
+        if (!this._ws || !this._isConnected || !this.currentResponseId) return;
 
         console.log('Cancelling current response:', this.currentResponseId);
         
@@ -368,14 +369,14 @@ export class OpenAIRealtimeService extends EventEmitter {
             type: 'response.cancel'
         };
 
-        this.ws.send(JSON.stringify(cancelMessage));
+        this._ws.send(JSON.stringify(cancelMessage));
         
         // Clear audio buffer to prevent stale audio from playing
         this.audioBuffer = [];
     }
 
     sendAudio(audioData: Uint8Array): void {
-        if (!this.ws || !this.isConnected) {
+        if (!this._ws || !this._isConnected) {
             console.warn('OpenAI WebSocket not connected');
             return;
         }
@@ -396,11 +397,11 @@ export class OpenAIRealtimeService extends EventEmitter {
             audio: base64Audio
         };
 
-        this.ws.send(JSON.stringify(message));
+        this._ws.send(JSON.stringify(message));
     }
 
     sendText(text: string): void {
-        if (!this.ws || !this.isConnected) {
+        if (!this._ws || !this._isConnected) {
             console.warn('OpenAI WebSocket not connected');
             return;
         }
@@ -425,12 +426,12 @@ export class OpenAIRealtimeService extends EventEmitter {
             }
         };
 
-        this.ws.send(JSON.stringify(message));
+        this._ws.send(JSON.stringify(message));
         this.createResponse();
     }
 
     private createResponse(): void {
-        if (!this.ws || !this.isConnected) return;
+        if (!this._ws || !this._isConnected) return;
 
         // Don't create a new response if one is already in progress
         if (this.isGeneratingResponse) {
@@ -446,11 +447,11 @@ export class OpenAIRealtimeService extends EventEmitter {
             }
         };
 
-        this.ws.send(JSON.stringify(message));
+        this._ws.send(JSON.stringify(message));
     }
 
     commitAudio(): void {
-        if (!this.ws || !this.isConnected) return;
+        if (!this._ws || !this._isConnected) return;
 
         // Don't commit audio if we're generating a response or should interrupt
         if (this.isGeneratingResponse || this.shouldInterruptResponse) {
@@ -462,17 +463,17 @@ export class OpenAIRealtimeService extends EventEmitter {
             type: 'input_audio_buffer.commit'
         };
 
-        this.ws.send(JSON.stringify(message));
+        this._ws.send(JSON.stringify(message));
     }
 
     clearAudioBuffer(): void {
-        if (!this.ws || !this.isConnected) return;
+        if (!this._ws || !this._isConnected) return;
 
         const message = {
             type: 'input_audio_buffer.clear'
         };
 
-        this.ws.send(JSON.stringify(message));
+        this._ws.send(JSON.stringify(message));
     }
 
     disconnect(): void {
@@ -484,11 +485,11 @@ export class OpenAIRealtimeService extends EventEmitter {
             clearInterval(this.timeoutCheckInterval);
             this.timeoutCheckInterval = null;
         }
-        if (this.ws) {
-            this.ws.close();
-            this.ws = null;
+        if (this._ws) {
+            this._ws.close();
+            this._ws = null;
         }
-        this.isConnected = false;
+        this._isConnected = false;
         this.isGeneratingResponse = false;
         this.shouldInterruptResponse = false;
     }
