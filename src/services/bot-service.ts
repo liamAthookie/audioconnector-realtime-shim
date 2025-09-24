@@ -76,8 +76,8 @@ export class BotResource extends EventEmitter {
             // OpenAI sends G.711 μ-law directly, use as-is
             const pcmuData = new Uint8Array(audioBuffer);
             
-            // For initial response, don't send via callback - let the stored response handle it
-            if (this.audioCallback && this.hasInitialResponseSent) {
+            // Send audio immediately via callback for real-time playback
+            if (this.audioCallback) {
                 this.audioCallback(pcmuData);
             }
             
