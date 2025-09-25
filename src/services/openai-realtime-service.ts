@@ -1,6 +1,7 @@
 import { WebSocket } from 'ws';
 import { EventEmitter } from 'events';
 import OpenAI from 'openai';
+import { FlagsmithService } from './flagsmith-service';
 
 export interface OpenAIRealtimeConfig {
     apiKey: string;
@@ -34,6 +35,7 @@ export class OpenAIRealtimeService extends EventEmitter {
     private pendingModerationCheck = false;
     private lastUserSpeechTime: number = 0;
     private responseDebounceTimeout: NodeJS.Timeout | null = null;
+    private flagsmithService: FlagsmithService;
 
     // Public getters for accessing private properties
     get ws(): WebSocket | null {
@@ -56,12 +58,17 @@ export class OpenAIRealtimeService extends EventEmitter {
         this.openai = new OpenAI({
             apiKey: this.config.apiKey
         });
+        
+        this.flagsmithService = new FlagsmithService();
     }
 
     async connect(): Promise<void> {
         if (this.isConnected) {
             return;
         }
+        
+        // Initialize Flagsmith service
+        await this.flagsmithService.initialize();
         
         if (!this.config.apiKey) {
             throw new Error('OpenAI API key is required. Please set the OPENAI_API_KEY environment variable.');
@@ -209,22 +216,36 @@ export class OpenAIRealtimeService extends EventEmitter {
                     console.log('Transcription:', message.transcript);
                     this.lastActivityTime = Date.now();
                     
-                    // Check moderation before emitting transcript
-                    this.checkModeration(message.transcript)
-                        .then((isFlagged) => {
-                            if (isFlagged) {
-                                console.log('Content flagged by moderation, sending rejection response');
-                                this.sendModerationRejection();
+                    // Check if moderation is enabled via feature flag
+                    this.flagsmithService.isFeatureEnabled('moderation-enabled')
+                        .then((moderationEnabled) => {
+                            if (moderationEnabled) {
+                                console.log('Moderation enabled, checking content');
+                                // Check moderation before emitting transcript
+                                return this.checkModeration(message.transcript)
+                                    .then((isFlagged) => {
+                                        if (isFlagged) {
+                                            console.log('Content flagged by moderation, sending rejection response');
+                                            this.sendModerationRejection();
+                                        } else {
+                                            this.emit('transcript', {
+                                                text: message.transcript,
+                                                confidence: 1.0
+                                            });
+                                        }
+                                    });
                             } else {
+                                console.log('Moderation disabled, skipping moderation check');
                                 this.emit('transcript', {
                                     text: message.transcript,
                                     confidence: 1.0
                                 });
+                                return Promise.resolve();
                             }
                         })
                         .catch((error) => {
-                            console.error('Moderation check failed:', error);
-                            // Continue with normal flow if moderation fails
+                            console.error('Feature flag check or moderation failed:', error);
+                            // Continue with normal flow if feature flag check or moderation fails
                             this.emit('transcript', {
                                 text: message.transcript,
                                 confidence: 1.0
