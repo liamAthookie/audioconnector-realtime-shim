@@ -226,7 +226,7 @@ export class OpenAIRealtimeService extends EventEmitter {
                                     .then((isFlagged) => {
                                         if (isFlagged) {
                                             console.log('Content flagged by moderation, sending rejection response');
-                                            this.sendModerationRejection();
+                                            this.handleModerationRejection();
                                         } else {
                                             this.emit('transcript', {
                                                 text: message.transcript,
@@ -349,7 +349,24 @@ export class OpenAIRealtimeService extends EventEmitter {
         }
     }
 
-    private sendModerationRejection(): void {
+    private handleModerationRejection(): void {
+        if (!this.ws || !this.isConnected) return;
+
+        // First, cancel any active response
+        if (this.isGeneratingResponse && this.currentResponseId) {
+            console.log('Cancelling active response due to moderation rejection');
+            this.cancelCurrentResponse();
+            
+            // Wait a moment for the cancellation to process
+            setTimeout(() => {
+                this.sendModerationRejectionMessage();
+            }, 100);
+        } else {
+            this.sendModerationRejectionMessage();
+        }
+    }
+
+    private sendModerationRejectionMessage(): void {
         if (!this.ws || !this.isConnected) return;
 
         // Create a conversation item with the rejection message
