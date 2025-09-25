@@ -1,4 +1,4 @@
-import { Flagsmith, Flag } from 'flagsmith-nodejs';
+import { Flagsmith } from 'flagsmith-nodejs';
 
 export class FlagsmithService {
     private flagsmith?: Flagsmith;
@@ -39,15 +39,14 @@ export class FlagsmithService {
         }
 
         try {
-            let flags: Flag[];
+            let flags;
             if (userId) {
                 flags = await this.flagsmith.getIdentityFlags(userId);
             } else {
                 flags = await this.flagsmith.getEnvironmentFlags();
             }
 
-            const feature = flags.find(flag => flag.feature.name === featureName);
-            const isEnabled = feature ? feature.enabled : false;
+            const isEnabled = flags.isFeatureEnabled(featureName);
             
             console.log(`Feature flag ${featureName}: ${isEnabled}`);
             return isEnabled;
@@ -65,15 +64,14 @@ export class FlagsmithService {
         }
 
         try {
-            let flags: Flag[];
+            let flags;
             if (userId) {
                 flags = await this.flagsmith.getIdentityFlags(userId);
             } else {
                 flags = await this.flagsmith.getEnvironmentFlags();
             }
 
-            const feature = flags.find(flag => flag.feature.name === featureName);
-            return feature ? feature.feature_state_value : null;
+            return flags.getFeatureValue(featureName);
         } catch (error) {
             console.error(`Error getting feature flag value ${featureName}:`, error);
             return null;
