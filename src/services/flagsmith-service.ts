@@ -71,7 +71,7 @@ export class FlagsmithService {
                 flags = await this.flagsmith.getEnvironmentFlags();
             }
 
-            return flags.getFeatureValue(featureName);
+            const value = flags.getFeatureValue(featureName);
             return value !== undefined ? String(value) : null;
         } catch (error) {
             console.error(`Error getting feature flag value ${featureName}:`, error);
