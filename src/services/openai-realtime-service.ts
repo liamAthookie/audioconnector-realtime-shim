@@ -68,7 +68,7 @@ export class OpenAIRealtimeService extends EventEmitter {
         }
         
         // Initialize Flagsmith service
-        await this.flagsmithService.initialize();
+        // Flagsmith will be initialized on first use
         
         if (!this.config.apiKey) {
             throw new Error('OpenAI API key is required. Please set the OPENAI_API_KEY environment variable.');
