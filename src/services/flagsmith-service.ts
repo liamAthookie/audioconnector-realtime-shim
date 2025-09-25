@@ -72,7 +72,6 @@ export class FlagsmithService {
             }
 
             return flags.getFeatureValue(featureName);
-            const value = flags.getFeatureValue(featureName);
             return value !== undefined ? String(value) : null;
         } catch (error) {
             console.error(`Error getting feature flag value ${featureName}:`, error);
