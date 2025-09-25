@@ -37,10 +37,12 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           API_KEY: ${{ secrets.API_KEY }}
           API_SECRET: ${{ secrets.API_SECRET }}
+          FLAGSMITH_API_KEY: ${{ secrets.FLAGSMITH_API_KEY }}
         run: |
           flyctl secrets set OPENAI_API_KEY="$OPENAI_API_KEY" --stage --app "$FLY_APP"
           flyctl secrets set API_KEY="$API_KEY" --stage --app "$FLY_APP"
           flyctl secrets set API_SECRET="$API_SECRET" --stage --app "$FLY_APP"
+          flyctl secrets set FLAGSMITH_API_KEY="$FLAGSMITH_API_KEY" --stage --app "$FLY_APP"
 
       - name: Deploy
         env:
