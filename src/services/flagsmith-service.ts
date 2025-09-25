@@ -1,4 +1,4 @@
-import { Flagsmith } from 'flagsmith-nodejs';
+import Flagsmith from 'flagsmith-nodejs';
 
 export class FlagsmithService {
     private flagsmith?: Flagsmith;
