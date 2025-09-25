@@ -3,8 +3,6 @@ import Flagsmith from 'flagsmith-nodejs';
 export class FlagsmithService {
     private flagsmith?: Flagsmith;
     private flagsCache: Map<string, any> = new Map();
-    private cacheTimestamp: number = 0;
-    private cacheTimeout: number = 30000; // 30 seconds cache timeout
 
     constructor() {
         const apiKey = process.env.FLAGSMITH_API_KEY;
@@ -19,7 +17,7 @@ export class FlagsmithService {
         });
     }
 
-    private async refreshFlagsCache(): Promise<void> {
+    async refreshFlagsCache(): Promise<void> {
         if (!this.flagsmith) {
             return;
         }
@@ -41,19 +39,9 @@ export class FlagsmithService {
                 }
             }
             
-            this.cacheTimestamp = Date.now();
             console.log('Flagsmith flags cached successfully');
         } catch (error) {
             console.error('Failed to refresh Flagsmith flags cache:', error);
-        }
-    }
-
-    private async ensureFreshCache(): Promise<void> {
-        const now = Date.now();
-        const cacheAge = now - this.cacheTimestamp;
-        
-        if (cacheAge > this.cacheTimeout || this.flagsCache.size === 0) {
-            await this.refreshFlagsCache();
         }
     }
 
@@ -63,9 +51,6 @@ export class FlagsmithService {
             return false;
         }
 
-        // Refresh cache if needed
-        await this.ensureFreshCache();
-        
         // Try to get from cache first
         const cachedValue = this.flagsCache.get(`${featureName}_enabled`);
         if (cachedValue !== undefined) {
@@ -99,9 +84,6 @@ export class FlagsmithService {
             return null;
         }
 
-        // Refresh cache if needed
-        await this.ensureFreshCache();
-        
         // Try to get from cache first
         const cachedValue = this.flagsCache.get(`${featureName}_value`);
         if (cachedValue !== undefined) {
