@@ -218,8 +218,9 @@ export class OpenAIRealtimeService extends EventEmitter {
                     this.lastActivityTime = Date.now();
                     
                     // Check if moderation is enabled via feature flag
-                    this.flagsmithService.isFeatureEnabled('moderation-enabled')
-                        .then((moderationEnabled) => {
+                    this.flagsmithService.getFeatureValue('moderation-enabled')
+                        .then((moderationValue) => {
+                            const moderationEnabled = moderationValue === 'true';
                             if (moderationEnabled) {
                                 console.log('Moderation enabled, checking content');
                                 // Check moderation before emitting transcript
