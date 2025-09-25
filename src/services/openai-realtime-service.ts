@@ -339,7 +339,7 @@ export class OpenAIRealtimeService extends EventEmitter {
                 role: 'assistant',
                 content: [
                     {
-                        type: 'input_text',
+                        type: 'text',
                         text: "I'm sorry, I cannot help you with that request."
                     }
                 ]
