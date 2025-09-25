@@ -1,7 +1,7 @@
-import { Flagsmith } from 'flagsmith-nodejs';
+import { Flagsmith, Flag } from 'flagsmith-nodejs';
 
 export class FlagsmithService {
-    private flagsmith: Flagsmith;
+    private flagsmith?: Flagsmith;
     private isInitialized = false;
 
     constructor() {
@@ -39,7 +39,7 @@ export class FlagsmithService {
         }
 
         try {
-            let flags;
+            let flags: Flag[];
             if (userId) {
                 flags = await this.flagsmith.getIdentityFlags(userId);
             } else {
@@ -65,7 +65,7 @@ export class FlagsmithService {
         }
 
         try {
-            let flags;
+            let flags: Flag[];
             if (userId) {
                 flags = await this.flagsmith.getIdentityFlags(userId);
             } else {
