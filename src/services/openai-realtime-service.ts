@@ -228,7 +228,17 @@ export class OpenAIRealtimeService extends EventEmitter {
                                     .then((isFlagged) => {
                                         if (isFlagged) {
                                             console.log('Content flagged by moderation, sending rejection response');
-                                            this.handleModerationRejection();
+                                            // Cancel any active response first
+                                            if (this.isGeneratingResponse && this.currentResponseId) {
+                                                this.cancelCurrentResponse();
+                                            }
+                                            // Set flag to prevent normal response processing
+                                            this.shouldInterruptResponse = true;
+                                            // Send rejection after a brief delay to ensure cancellation is processed
+                                            setTimeout(() => {
+                                                this.sendModerationRejectionMessage();
+                                                this.shouldInterruptResponse = false;
+                                            }, 200);
                                         } else {
                                             this.emit('transcript', {
                                                 text: message.transcript,
@@ -304,16 +314,16 @@ export class OpenAIRealtimeService extends EventEmitter {
 
             case 'response.done':
                 console.log('Response generation completed:', this.currentResponseId);
-                this.isGeneratingResponse = false;
                 
                 if (!this.shouldInterruptResponse) {
+                    this.isGeneratingResponse = false;
                     this.emit('response_complete');
                 } else {
                     console.log('Response was interrupted, not emitting completion');
+                    this.isGeneratingResponse = false;
                 }
                 
                 this.currentResponseId = null;
-                this.shouldInterruptResponse = false;
                 this.lastActivityTime = Date.now();
                 break;
 
@@ -351,26 +361,12 @@ export class OpenAIRealtimeService extends EventEmitter {
         }
     }
 
-    private handleModerationRejection(): void {
-        if (!this.ws || !this.isConnected) return;
-
-        // First, cancel any active response
-        if (this.isGeneratingResponse && this.currentResponseId) {
-            console.log('Cancelling active response due to moderation rejection');
-            this.cancelCurrentResponse();
-            
-            // Wait a moment for the cancellation to process
-            setTimeout(() => {
-                this.sendModerationRejectionMessage();
-            }, 100);
-        } else {
-            this.sendModerationRejectionMessage();
-        }
-    }
 
     private sendModerationRejectionMessage(): void {
         if (!this.ws || !this.isConnected) return;
 
+        console.log('Sending moderation rejection message');
+        
         // Create a conversation item with the rejection message
         const rejectionMessage = {
             type: 'conversation.item.create',
