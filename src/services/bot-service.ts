@@ -3,6 +3,8 @@ import { JsonStringMap } from '../protocol/core';
 import { BotTurnDisposition } from '../protocol/voice-bots';
 import { TTSService } from './tts-service';
 import { OpenAIRealtimeService, OpenAIRealtimeConfig } from './openai-realtime-service';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export interface BotResponse {
     disposition: BotTurnDisposition;
@@ -17,14 +19,18 @@ export class BotResource extends EventEmitter {
     private ttsService = new TTSService();
     private audioCallback: ((audio: Uint8Array) => void) | null = null;
     private isInitialized = false;
+    private combinedInstructions: string = '';
 
     constructor(private botId: string, private config: any) {
         super();
         
+        // Load and combine instructions
+        this.loadInstructions();
+        
         const openAIConfig: OpenAIRealtimeConfig = {
             apiKey: process.env.OPENAI_API_KEY || '',
             voice: 'alloy',
-            instructions: 'You are a helpful customer service assistant. Be concise, friendly, and professional in your responses. Keep responses brief and to the point.',
+            instructions: this.combinedInstructions,
             temperature: 0.7
         };
 
@@ -32,6 +38,28 @@ export class BotResource extends EventEmitter {
         this.setupOpenAIEventHandlers();
     }
 
+    private loadInstructions(): void {
+        try {
+            const instructionsDir = path.join(__dirname, '..', '..', 'instructions');
+            
+            // Load Global Agent Instructions
+            const globalInstructionsPath = path.join(instructionsDir, 'Global_Agent_Instructions.md');
+            const globalInstructions = fs.readFileSync(globalInstructionsPath, 'utf8');
+            
+            // Load Greeting Agent Instructions
+            const greetingInstructionsPath = path.join(instructionsDir, 'Greeting_Agent_Instructions.md');
+            const greetingInstructions = fs.readFileSync(greetingInstructionsPath, 'utf8');
+            
+            // Combine instructions
+            this.combinedInstructions = `${globalInstructions}\n\n${greetingInstructions}`;
+            
+            console.log('Successfully loaded and combined agent instructions');
+        } catch (error) {
+            console.error('Error loading instructions:', error);
+            // Fallback to default instructions
+            this.combinedInstructions = 'You are a helpful customer service assistant. Be concise, friendly, and professional in your responses. Keep responses brief and to the point.';
+        }
+    }
     private setupOpenAIEventHandlers(): void {
         this.openAIService.on('audio_response', (audioData: Uint8Array) => {
             console.log('Received audio response from OpenAI, sending to client');
@@ -92,9 +120,9 @@ export class BotResource extends EventEmitter {
             await this.initialize();
         }
 
-        // Send initial greeting request to OpenAI
+        // Send initial greeting request to OpenAI with combined instructions
         if (this.openAIService.isConnected) {
-            // Create a system message to set up the greeting context
+            // Create a system message with the combined instructions for greeting
             const greetingMessage = {
                 type: 'conversation.item.create',
                 item: {
@@ -103,7 +131,7 @@ export class BotResource extends EventEmitter {
                     content: [
                         {
                             type: 'input_text',
-                            text: 'Please provide a brief, friendly greeting to welcome the customer to our customer service. Keep it concise and professional, around 1-2 sentences.'
+                            text: `${this.combinedInstructions}\n\nNow provide the initial greeting as specified in the greeting instructions.`
                         }
                     ]
                 }
@@ -116,7 +144,7 @@ export class BotResource extends EventEmitter {
                 type: 'response.create',
                 response: {
                     modalities: ['text', 'audio'],
-                    instructions: 'Provide a brief, friendly greeting to welcome the customer to our customer service.'
+                    instructions: 'Follow the greeting agent instructions to provide the appropriate welcome message.'
                 }
             };
 
@@ -125,7 +153,7 @@ export class BotResource extends EventEmitter {
 
         return {
             disposition: 'match',
-            text: 'Hello! Welcome to our customer service. How can I help you today?',
+            text: 'Welcome! Hej och välkommen! I can speak multiple languages. Please describe what you need help with.',
             confidence: 1.0
         };
     }
