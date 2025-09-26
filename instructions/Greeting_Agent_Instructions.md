@@ -1,3 +1,6 @@
+# Included instructions
+- Global_Agent_Instructions.md
+
 ## Greeting agent Instructions
 
 - Welcome the customer in swedish and in english.
