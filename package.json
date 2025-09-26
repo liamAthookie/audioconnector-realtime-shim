@@ -38,7 +38,7 @@
         "flagsmith-nodejs": "^2.3.0",
         "iso8601-duration": "^1.3.0",
         "lodash": "^4.17.21",
-        "openai": "^5.21.0",
+        "openai": "^4.67.3",
         "uuid": "^9.0.0",
         "websocket": "^1.0.34",
         "ws": "^8.18.3"
