@@ -1,0 +1,20 @@
+[
+  {
+    "type": "function",
+    "name": "route_intent",
+    "description": "Route the caller by intent with compact, structured payload.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "intent": { "type": "string" },
+        "confidence": { "type": "number" },
+        "entities": { "type": "object" },
+        "urgency": { "type": "string", "enum": ["low", "normal", "high"] },
+        "sentiment": { "type": "string", "enum": ["negative", "neutral", "positive"] },
+        "summary": { "type": "string" }
+      },
+      "required": ["intent", "confidence", "entities", "urgency", "sentiment", "summary"],
+      "additionalProperties": false
+    }
+  }
+]
