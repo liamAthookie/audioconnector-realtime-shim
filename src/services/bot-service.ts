@@ -114,6 +114,14 @@ export class BotResource extends EventEmitter {
 
         this.openAIService.on('transcript', (transcript: { text: string; confidence: number }) => {
             console.log(`[USER] Transcript: ${transcript.text}`);
+            
+            // After first user input in greeting mode, switch to intent mode
+            if (this.currentMode === 'greeting' && this.isNewSession) {
+                console.log('[SYSTEM] First user input received - switching to intent mode');
+                this.setIntentMode();
+                this.updateSessionInstructions();
+                this.isNewSession = false;
+            }
         });
 
         this.openAIService.on('speech_started', () => {
@@ -145,32 +153,21 @@ export class BotResource extends EventEmitter {
         
         console.log(`[SYSTEM] Processing intent: ${intent} with confidence: ${confidence}`);
         
-        // Check if intent is unknown or unclear
-        if (intent === 'unclear' || intent === 'support_other' || confidence < 0.7) {
-            if (this.isNewSession) {
-                console.log('[SYSTEM] Unknown intent in new session - switching to greeting mode');
-                this.setGreetingMode();
-            } else {
-                console.log('[SYSTEM] Unknown intent in existing session - switching to intent mode');
-                this.setIntentMode();
-            }
+        // Check if we have a bot for this intent
+        const intentConfig = this.intentService.getIntentConfig(intent);
+        
+        if (intentConfig) {
+            console.log(`[SYSTEM] Found bot configuration for intent: ${intent}`);
+            this.setBotMode(intentConfig);
         } else {
-            // Check if we have a bot for this intent
-            const intentConfig = this.intentService.getIntentConfig(intent);
+            console.log(`[SYSTEM] Intent '${intent}' is not supported - switching to handover mode`);
+            this.setHandoverMode();
             
-            if (intentConfig) {
-                console.log(`[SYSTEM] Found bot configuration for intent: ${intent}`);
-                this.setBotMode(intentConfig);
-            } else {
-                console.log(`[SYSTEM] Intent '${intent}' is not supported - switching to handover mode`);
-                this.setHandoverMode();
-                
-                // Schedule session end after handover response
-                setTimeout(() => {
-                    console.log('[SYSTEM] Ending session after handover');
-                    this.emit('session_end', 'handover_complete');
-                }, 3000); // Give time for handover message to be delivered
-            }
+            // Schedule session end after handover response
+            setTimeout(() => {
+                console.log('[SYSTEM] Ending session after handover');
+                this.emit('session_end', 'handover_complete');
+            }, 3000); // Give time for handover message to be delivered
         }
         
         // Update session with new instructions
