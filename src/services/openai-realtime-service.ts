@@ -177,7 +177,7 @@ export class OpenAIRealtimeService extends EventEmitter {
             type: 'session.update',
             session: {
                 modalities: ['text', 'audio'],
-                instructions: (this.config.instructions || 'You are a helpful voice assistant. Be concise and natural in your responses.') + '\n\n**CRITICAL**: When a customer describes what they need help with, you MUST call the route_intent function to classify their request.',
+                instructions: this.config.instructions || 'You are a helpful voice assistant. Be concise and natural in your responses.',
                 voice: this.config.voice,
                 input_audio_format: 'g711_ulaw',
                 output_audio_format: 'g711_ulaw',

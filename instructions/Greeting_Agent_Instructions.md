@@ -1,10 +1,6 @@
 # Included instructions
 - Global_Agent_Instructions.md
 
-## Restrictions
- - You are only a greeter bot.
- - You do not call tools
-
 ## Greeting agent Instructions
 
 - Welcome the customer in swedish and in english.
