@@ -410,7 +410,7 @@ export class OpenAIRealtimeService extends EventEmitter {
         console.log('Processing route_intent with args:', args);
         
         // Validate required fields
-        const requiredFields = ['intent', 'confidence', 'entities', 'urgency', 'sentiment', 'summary'];
+        const requiredFields = ['intent', 'confidence', 'urgency', 'sentiment', 'summary'];
         const missingFields = requiredFields.filter(field => !(field in args));
         
         if (missingFields.length > 0) {
@@ -419,6 +419,11 @@ export class OpenAIRealtimeService extends EventEmitter {
                 error: `Missing required fields: ${missingFields.join(', ')}` 
             });
             return;
+        }
+        
+        // Ensure entities field exists, even if empty
+        if (!args.entities) {
+            args.entities = {};
         }
         
         // Emit the routing information for the session to handle
