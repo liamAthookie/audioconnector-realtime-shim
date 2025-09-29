@@ -135,7 +135,7 @@ export class Session {
     send(message: ServerMessage) {
         if (message.type === 'event') {
             console.log(`Sending an ${message.type} message: ${message.parameters.entities[0].type}.`);
-        } else {
+        } else if (message.type !== 'pong') {
             console.log(`Sending a ${message.type} message.`);
         }
         
