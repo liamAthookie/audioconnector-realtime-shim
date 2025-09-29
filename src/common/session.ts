@@ -197,7 +197,7 @@ export class Session {
         const disconnectParameters: DisconnectParameters = {
             reason,
             info,
-            outputVariables
+            outputVariables: { ...this.outputVariables, ...outputVariables }
         };
         const message = this.createMessage('disconnect', disconnectParameters);
 
@@ -247,15 +247,32 @@ export class Session {
                         
                         // Handle handover scenario
                         if (routingInfo.isHandover) {
-                            console.log('Handover mode detected - preparing for session end');
+                            console.log('Handover mode detected - preparing to transfer to Genesys');
                             // You can add custom logic here for handover
                             // For example, transfer to a specific queue, update session variables, etc.
+                            
+                            // Set output variables for Genesys to handle the transfer
+                            const outputVariables: JsonStringMap = {
+                                'transfer_reason': 'unsupported_intent',
+                                'original_intent': routingInfo.intent,
+                                'intent_confidence': routingInfo.confidence?.toString() || '0',
+                                'customer_summary': routingInfo.summary || 'Customer needs specialized assistance'
+                            };
+                            
+                            // Store output variables for when session ends
+                            this.setOutputVariables(outputVariables);
                         }
                     });
                 }
                 
                 return this.selectedBot != null;
             });
+    }
+
+    private outputVariables: JsonStringMap = {};
+
+    setOutputVariables(variables: JsonStringMap) {
+        this.outputVariables = { ...this.outputVariables, ...variables };
     }
 
     /*

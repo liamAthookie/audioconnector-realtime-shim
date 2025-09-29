@@ -434,7 +434,7 @@ export class OpenAIRealtimeService extends EventEmitter {
         // Send success response back to OpenAI
         this.sendFunctionCallResult(callId, {
             success: true,
-            message: `Intent '${args.intent}' routed successfully with confidence ${args.confidence}`
+            message: `Intent routing processed. Switching to appropriate mode based on intent support.`
         });
     }
 

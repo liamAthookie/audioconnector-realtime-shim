@@ -150,14 +150,14 @@ export class BotResource extends EventEmitter {
                 console.log(`Found bot configuration for intent: ${intent}`);
                 this.setBotMode(intentConfig);
             } else {
-                console.log(`No bot found for intent: ${intent} - switching to handover mode`);
+                console.log(`Intent '${intent}' is not supported - switching to handover mode`);
                 this.setHandoverMode();
                 
                 // Schedule session end after handover response
                 setTimeout(() => {
                     console.log('Ending session after handover');
                     this.emit('session_end', 'handover_complete');
-                }, 5000); // Give time for handover message to be delivered
+                }, 3000); // Give time for handover message to be delivered
             }
         }
         
