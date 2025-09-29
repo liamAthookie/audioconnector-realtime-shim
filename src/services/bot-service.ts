@@ -47,13 +47,15 @@ export class BotResource extends EventEmitter {
     private setGreetingMode(): void {
         this.currentMode = 'greeting';
         this.currentInstructions = this.instructionLoader.getGreetingInstructions();
-        console.log('Set mode to: greeting');
+        console.log('[SYSTEM] Set mode to: GREETING');
+        this.openAIService.setCurrentMode('greeting');
     }
 
     private setIntentMode(): void {
         this.currentMode = 'intent';
         this.currentInstructions = this.instructionLoader.getIntentInstructions();
-        console.log('Set mode to: intent');
+        console.log('[SYSTEM] Set mode to: INTENT');
+        this.openAIService.setCurrentMode('intent');
     }
 
     private setBotMode(intentConfig: any): void {
@@ -64,13 +66,15 @@ export class BotResource extends EventEmitter {
             // Fallback to intent instructions if no specific bot instructions
             this.currentInstructions = this.instructionLoader.getIntentInstructions();
         }
-        console.log(`Set mode to: bot (${intentConfig.name})`);
+        console.log(`[SYSTEM] Set mode to: BOT (${intentConfig.name.toUpperCase()})`);
+        this.openAIService.setCurrentMode(`bot-${intentConfig.name}`);
     }
 
     private setHandoverMode(): void {
         this.currentMode = 'handover';
         this.currentInstructions = this.instructionLoader.getHandoverInstructions();
-        console.log('Set mode to: handover');
+        console.log('[SYSTEM] Set mode to: HANDOVER');
+        this.openAIService.setCurrentMode('handover');
     }
 
     private updateSessionInstructions(): void {
@@ -84,46 +88,46 @@ export class BotResource extends EventEmitter {
         };
 
         this.openAIService.ws?.send(JSON.stringify(sessionUpdate));
-        console.log(`Updated session instructions for mode: ${this.currentMode}`);
+        console.log(`[SYSTEM] Updated session instructions for mode: ${this.currentMode.toUpperCase()}`);
     }
 
     private setupOpenAIEventHandlers(): void {
         this.openAIService.on('audio_response', (audioData: Uint8Array) => {
-            console.log('Received audio response from OpenAI, sending to client');
+            console.log(`[${this.currentMode.toUpperCase()} AGENT] Received audio response from OpenAI, sending to client`);
             if (this.audioCallback) {
                 this.audioCallback(audioData);
             }
         });
 
         this.openAIService.on('text_response', (text: string) => {
-            console.log('Received text response from OpenAI:', text);
+            console.log(`[${this.currentMode.toUpperCase()} AGENT] Text response: ${text}`);
             // Text responses are handled via the audio callback mechanism
         });
 
         this.openAIService.on('transcript', (transcript: { text: string; confidence: number }) => {
-            console.log('User transcript:', transcript.text);
+            console.log(`[USER] Transcript: ${transcript.text}`);
         });
 
         this.openAIService.on('speech_started', () => {
-            console.log('User started speaking');
+            console.log('[USER] Started speaking');
         });
 
         this.openAIService.on('speech_stopped', () => {
-            console.log('User stopped speaking');
+            console.log('[USER] Stopped speaking');
         });
 
         this.openAIService.on('session_timeout', (reason: string) => {
-            console.log('Session timeout:', reason);
+            console.log(`[SYSTEM] Session timeout: ${reason}`);
             this.emit('session_end', reason);
         });
 
         this.openAIService.on('error', (error: any) => {
-            console.error('OpenAI Realtime API error:', error);
+            console.error('[SYSTEM] OpenAI Realtime API error:', error);
             this.emit('session_end', 'error');
         });
 
         this.openAIService.on('intent_routed', (routingInfo: any) => {
-            console.log('Intent routing received:', routingInfo);
+            console.log(`[SYSTEM] Intent routing received: ${JSON.stringify(routingInfo)}`);
             this.handleIntentRouting(routingInfo);
         });
     }
@@ -131,15 +135,15 @@ export class BotResource extends EventEmitter {
     private handleIntentRouting(routingInfo: any): void {
         const { intent, confidence } = routingInfo;
         
-        console.log(`Processing intent: ${intent} with confidence: ${confidence}`);
+        console.log(`[SYSTEM] Processing intent: ${intent} with confidence: ${confidence}`);
         
         // Check if intent is unknown or unclear
         if (intent === 'unclear' || intent === 'support_other' || confidence < 0.7) {
             if (this.isNewSession) {
-                console.log('Unknown intent in new session - switching to greeting mode');
+                console.log('[SYSTEM] Unknown intent in new session - switching to greeting mode');
                 this.setGreetingMode();
             } else {
-                console.log('Unknown intent in existing session - switching to intent mode');
+                console.log('[SYSTEM] Unknown intent in existing session - switching to intent mode');
                 this.setIntentMode();
             }
         } else {
@@ -147,15 +151,15 @@ export class BotResource extends EventEmitter {
             const intentConfig = this.intentService.getIntentConfig(intent);
             
             if (intentConfig) {
-                console.log(`Found bot configuration for intent: ${intent}`);
+                console.log(`[SYSTEM] Found bot configuration for intent: ${intent}`);
                 this.setBotMode(intentConfig);
             } else {
-                console.log(`Intent '${intent}' is not supported - switching to handover mode`);
+                console.log(`[SYSTEM] Intent '${intent}' is not supported - switching to handover mode`);
                 this.setHandoverMode();
                 
                 // Schedule session end after handover response
                 setTimeout(() => {
-                    console.log('Ending session after handover');
+                    console.log('[SYSTEM] Ending session after handover');
                     this.emit('session_end', 'handover_complete');
                 }, 3000); // Give time for handover message to be delivered
             }
@@ -183,9 +187,9 @@ export class BotResource extends EventEmitter {
         try {
             await this.openAIService.connect();
             this.isInitialized = true;
-            console.log('Bot resource initialized successfully');
+            console.log('[SYSTEM] Bot resource initialized successfully');
         } catch (error) {
-            console.error('Failed to initialize bot resource:', error);
+            console.error('[SYSTEM] Failed to initialize bot resource:', error);
             throw error;
         }
     }
@@ -228,11 +232,12 @@ export class BotResource extends EventEmitter {
             };
 
             this.openAIService.ws?.send(JSON.stringify(responseMessage));
+            console.log('[GREETING AGENT] Initial greeting request sent to OpenAI');
         }
 
         return {
             disposition: 'match',
-            text: 'Initializing greeting...',
+            text: '[GREETING AGENT] Initializing greeting...',
             confidence: 1.0
         };
     }

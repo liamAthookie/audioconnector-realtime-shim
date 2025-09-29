@@ -343,6 +343,7 @@ export class OpenAIRealtimeService extends EventEmitter {
 
             case 'response.text.done':
                 if (message.text && !this.shouldInterruptResponse) {
+                    console.log(`[${this.getCurrentMode().toUpperCase()} AGENT] Response: ${message.text}`);
                     this.emit('text_response', message.text);
                 } else if (this.shouldInterruptResponse) {
                     console.log('Skipping text response due to interruption');
@@ -354,6 +355,7 @@ export class OpenAIRealtimeService extends EventEmitter {
                 
                 if (!this.shouldInterruptResponse) {
                     this.isGeneratingResponse = false;
+                    console.log(`[${this.getCurrentMode().toUpperCase()} AGENT] Audio response sent to customer`);
                     this.emit('response_complete');
                 } else {
                     console.log('Response was interrupted, not emitting completion');
@@ -467,6 +469,18 @@ export class OpenAIRealtimeService extends EventEmitter {
 
         this._ws.send(JSON.stringify(responseMessage));
     }
+
+    private getCurrentMode(): string {
+        // This will be set by the bot service when mode changes
+        return this.currentMode || 'unknown';
+    }
+
+    setCurrentMode(mode: string): void {
+        this.currentMode = mode;
+        console.log(`[SYSTEM] Agent mode changed to: ${mode.toUpperCase()}`);
+    }
+
+    private currentMode: string = 'greeting';
 
     private async checkModeration(text: string): Promise<boolean> {
         try {
