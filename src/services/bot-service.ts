@@ -47,12 +47,16 @@ export class BotResource extends EventEmitter {
     private setGreetingMode(): void {
         this.currentMode = 'greeting';
         this.currentInstructions = this.instructionLoader.getGreetingInstructions();
+        // Add function calling emphasis for greeting mode
+        this.currentInstructions += '\n\n**IMPORTANT**: After greeting and understanding the customer request, you MUST call the route_intent function to classify their intent.';
         console.log('Set mode to: greeting');
     }
 
     private setIntentMode(): void {
         this.currentMode = 'intent';
         this.currentInstructions = this.instructionLoader.getIntentInstructions();
+        // Add function calling emphasis for intent mode
+        this.currentInstructions += '\n\n**CRITICAL**: You MUST call the route_intent function immediately after understanding what the customer needs.';
         console.log('Set mode to: intent');
     }
 
