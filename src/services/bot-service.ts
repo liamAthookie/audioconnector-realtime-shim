@@ -94,6 +94,12 @@ export class BotResource extends EventEmitter {
             console.error('OpenAI Realtime API error:', error);
             this.emit('session_end', 'error');
         });
+
+        this.openAIService.on('intent_routed', (routingInfo: any) => {
+            console.log('Intent routing received:', routingInfo);
+            // Emit to session for further processing
+            this.emit('intent_routed', routingInfo);
+        });
     }
 
     async initialize(): Promise<void> {

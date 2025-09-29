@@ -240,6 +240,13 @@ export class Session {
                         console.log('Bot session ended:', reason);
                         this.sendDisconnect('completed', `Session ended: ${reason}`, {});
                     });
+                    
+                    // Listen for intent routing events
+                    this.selectedBot.on('intent_routed', (routingInfo: any) => {
+                        console.log('Intent routed in session:', routingInfo);
+                        // You can add custom logic here to handle the routed intent
+                        // For example, transfer to a specific queue, update session variables, etc.
+                    });
                 }
                 
                 return this.selectedBot != null;

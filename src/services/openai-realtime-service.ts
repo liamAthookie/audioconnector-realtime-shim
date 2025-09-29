@@ -2,6 +2,8 @@ import { WebSocket } from 'ws';
 import { EventEmitter } from 'events';
 import OpenAI from 'openai';
 import { FlagsmithService } from './flagsmith-service';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export interface OpenAIRealtimeConfig {
     apiKey: string;
@@ -37,6 +39,9 @@ export class OpenAIRealtimeService extends EventEmitter {
     private responseDebounceTimeout: NodeJS.Timeout | null = null;
     private flagsmithService: FlagsmithService;
 
+    // Tools configuration
+    private tools: any[] = [];
+
     // Public getters for accessing private properties
     get ws(): WebSocket | null {
         return this._ws;
@@ -60,6 +65,32 @@ export class OpenAIRealtimeService extends EventEmitter {
         });
         
         this.flagsmithService = new FlagsmithService();
+        
+        // Load tools on initialization
+        this.loadTools();
+    }
+
+    private loadTools(): void {
+        try {
+            const toolsPath = path.join(__dirname, '..', '..', 'tools', 'tools.json');
+            
+            if (fs.existsSync(toolsPath)) {
+                const toolsData = fs.readFileSync(toolsPath, 'utf8');
+                this.tools = JSON.parse(toolsData);
+                console.log(`Loaded ${this.tools.length} tools from tools.json`);
+                
+                // Log tool names for debugging
+                this.tools.forEach(tool => {
+                    console.log(`- Tool: ${tool.name} (${tool.description})`);
+                });
+            } else {
+                console.log('No tools.json file found, proceeding without tools');
+                this.tools = [];
+            }
+        } catch (error) {
+            console.error('Error loading tools:', error);
+            this.tools = [];
+        }
     }
 
     async connect(): Promise<void> {
@@ -142,7 +173,7 @@ export class OpenAIRealtimeService extends EventEmitter {
     private initializeSession(): void {
         if (!this._ws) return;
 
-        const sessionUpdate = {
+        const sessionConfig: any = {
             type: 'session.update',
             session: {
                 modalities: ['text', 'audio'],
@@ -163,7 +194,13 @@ export class OpenAIRealtimeService extends EventEmitter {
             }
         };
 
-        this._ws.send(JSON.stringify(sessionUpdate));
+        // Add tools if available
+        if (this.tools.length > 0) {
+            sessionConfig.session.tools = this.tools;
+            console.log(`Adding ${this.tools.length} tools to session configuration`);
+        }
+
+        this._ws.send(JSON.stringify(sessionConfig));
     }
 
     private handleMessage(message: any): void {
@@ -327,6 +364,17 @@ export class OpenAIRealtimeService extends EventEmitter {
                 this.lastActivityTime = Date.now();
                 break;
 
+            case 'response.function_call_arguments.delta':
+                if (message.delta) {
+                    console.log('Function call arguments delta:', message.delta);
+                }
+                break;
+
+            case 'response.function_call_arguments.done':
+                console.log('Function call arguments completed:', message.arguments);
+                this.handleFunctionCall(message.call_id, message.name, message.arguments);
+                break;
+
             case 'error':
                 console.error('OpenAI API error:', message.error);
                 this.emit('error', message.error);
@@ -336,6 +384,83 @@ export class OpenAIRealtimeService extends EventEmitter {
                 // console.log('Unhandled OpenAI message type:', message.type);
                 break;
         }
+    }
+
+    private handleFunctionCall(callId: string, functionName: string, argumentsJson: string): void {
+        console.log(`Function call received: ${functionName} with call ID: ${callId}`);
+        
+        try {
+            const args = JSON.parse(argumentsJson);
+            console.log('Function arguments:', args);
+            
+            // Handle the route_intent function call
+            if (functionName === 'route_intent') {
+                this.handleRouteIntent(callId, args);
+            } else {
+                console.warn(`Unknown function called: ${functionName}`);
+                this.sendFunctionCallResult(callId, { error: 'Unknown function' });
+            }
+        } catch (error) {
+            console.error('Error parsing function arguments:', error);
+            this.sendFunctionCallResult(callId, { error: 'Invalid arguments' });
+        }
+    }
+
+    private handleRouteIntent(callId: string, args: any): void {
+        console.log('Processing route_intent with args:', args);
+        
+        // Validate required fields
+        const requiredFields = ['intent', 'confidence', 'entities', 'urgency', 'sentiment', 'summary'];
+        const missingFields = requiredFields.filter(field => !(field in args));
+        
+        if (missingFields.length > 0) {
+            console.error('Missing required fields:', missingFields);
+            this.sendFunctionCallResult(callId, { 
+                error: `Missing required fields: ${missingFields.join(', ')}` 
+            });
+            return;
+        }
+        
+        // Emit the routing information for the session to handle
+        this.emit('intent_routed', {
+            intent: args.intent,
+            confidence: args.confidence,
+            entities: args.entities,
+            urgency: args.urgency,
+            sentiment: args.sentiment,
+            summary: args.summary
+        });
+        
+        // Send success response back to OpenAI
+        this.sendFunctionCallResult(callId, {
+            success: true,
+            message: `Intent '${args.intent}' routed successfully with confidence ${args.confidence}`
+        });
+    }
+
+    private sendFunctionCallResult(callId: string, result: any): void {
+        if (!this._ws || !this._isConnected) return;
+
+        const message = {
+            type: 'conversation.item.create',
+            item: {
+                type: 'function_call_output',
+                call_id: callId,
+                output: JSON.stringify(result)
+            }
+        };
+
+        this._ws.send(JSON.stringify(message));
+        
+        // Create a response to continue the conversation
+        const responseMessage = {
+            type: 'response.create',
+            response: {
+                modalities: ['text', 'audio']
+            }
+        };
+
+        this._ws.send(JSON.stringify(responseMessage));
     }
 
     private async checkModeration(text: string): Promise<boolean> {
