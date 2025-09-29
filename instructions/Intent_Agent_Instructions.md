@@ -70,7 +70,7 @@ After clarifier:
 # Tool-Call Checklist (ALL must be true)
 - [ ] Intent is from catalog (not `support_other` on first turn).  
 - [ ] `confidence ≥ 0.7` (unless `intent="unclear"` after 2 tries). 
-- [ ] Entities asked are included in `entities`.  
+- [ ] Entities extracted from user input are included in `entities` object (e.g., {"email": "user@example.com", "msisdn": "1234567890"}).  
 - [ ] `summary ≤ 20 words`.  
 If any box is unchecked → **ask a clarifying question instead of routing**. 
 
@@ -109,7 +109,7 @@ Call only **route_intent** with JSON:
 {
   "intent": "<one of catalog>",
   "confidence": 0.00–1.00,
-  "entities": { "...": "...", 
+  "entities": { "email": "user@domain.com", "msisdn": "1234567890" }, 
   "urgency": "low|normal|high",
   "sentiment": "negative|neutral|positive",
   "summary": "≤20 words: what the caller wants"

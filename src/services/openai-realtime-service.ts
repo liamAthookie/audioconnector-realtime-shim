@@ -526,11 +526,14 @@ export class OpenAIRealtimeService extends EventEmitter {
 
         console.log('Cancelling current response:', this.currentResponseId);
         
-        const cancelMessage = {
-            type: 'response.cancel'
-        };
+        // Only try to cancel if we're actually generating a response
+        if (this.isGeneratingResponse) {
+            const cancelMessage = {
+                type: 'response.cancel'
+            };
 
-        this._ws.send(JSON.stringify(cancelMessage));
+            this._ws.send(JSON.stringify(cancelMessage));
+        }
         
         // Clear audio buffer to prevent stale audio from playing
         this.audioBuffer = [];
