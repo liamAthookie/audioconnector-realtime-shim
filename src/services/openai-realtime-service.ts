@@ -308,7 +308,6 @@ export class OpenAIRealtimeService extends EventEmitter {
                 this.isGeneratingResponse = true;
                 this.shouldInterruptResponse = false;
                 this.audioBuffer = [];
-                console.log('Response generation started:', this.currentResponseId);
                 break;
 
             case 'response.audio.delta':
@@ -356,9 +355,6 @@ export class OpenAIRealtimeService extends EventEmitter {
                 break;
 
             case 'response.done':
-                console.log('Response generation completed:', this.currentResponseId);
-                console.log(`[${this.getCurrentMode().toUpperCase()} AGENT] Full response.done message:`, JSON.stringify(message, null, 2));
-                
                 // Extract and log the transcript from the response
                 try {
                     if (message.response && 

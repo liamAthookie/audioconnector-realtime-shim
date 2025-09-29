@@ -143,23 +143,17 @@ export class Session {
     }
 
     sendAudio(bytes: Uint8Array) {
-        console.log(`Preparing to send ${bytes.length} bytes of audio`);
         if (bytes.length <= this.MAXIMUM_BINARY_MESSAGE_SIZE) {
-            console.log(`Sending ${bytes.length} binary bytes in 1 message.`);
             this.ws.send(bytes, { binary: true });
         } else {
             let currentPosition = 0;
-            let chunkCount = 0;
 
             while (currentPosition < bytes.length) {
                 const sendBytes = bytes.slice(currentPosition, currentPosition + this.MAXIMUM_BINARY_MESSAGE_SIZE);
 
-                chunkCount++;
-                console.log(`Sending ${sendBytes.length} binary bytes in chunk ${chunkCount}.`);
                 this.ws.send(sendBytes, { binary: true });
                 currentPosition += this.MAXIMUM_BINARY_MESSAGE_SIZE;
             }
-            console.log(`Completed sending audio in ${chunkCount} chunks`);
         }
     }
 
