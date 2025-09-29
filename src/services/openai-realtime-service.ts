@@ -251,7 +251,6 @@ export class OpenAIRealtimeService extends EventEmitter {
 
             case 'conversation.item.input_audio_transcription.completed':
                 if (message.transcript) {
-                    console.log('Transcription:', message.transcript);
                     this.lastActivityTime = Date.now();
                     
                     // Check if moderation is enabled via feature flag
@@ -385,9 +384,6 @@ export class OpenAIRealtimeService extends EventEmitter {
                 break;
 
             case 'response.function_call_arguments.delta':
-                if (message.delta) {
-                    console.log('Function call arguments delta:', message.delta);
-                }
                 break;
 
             case 'response.function_call_arguments.done':
