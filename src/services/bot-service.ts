@@ -30,32 +30,36 @@ export class BotResource extends EventEmitter {
     constructor(private botId: string, private config: any) {
         super();
         
-        // Start with greeting instructions for new session
-        this.setGreetingMode();
-        
         const openAIConfig: OpenAIRealtimeConfig = {
             apiKey: process.env.OPENAI_API_KEY || '',
             voice: 'alloy',
-            instructions: this.currentInstructions,
+            instructions: '', // Will be set after initialization
             temperature: 0.7
         };
 
         this.openAIService = new OpenAIRealtimeService(openAIConfig);
         this.setupOpenAIEventHandlers();
+        
+        // Start with greeting instructions for new session (after openAIService is created)
+        this.setGreetingMode();
     }
 
     private setGreetingMode(): void {
         this.currentMode = 'greeting';
         this.currentInstructions = this.instructionLoader.getGreetingInstructions();
         console.log('[SYSTEM] Set mode to: GREETING');
-        this.openAIService.setCurrentMode('greeting');
+        if (this.openAIService) {
+            this.openAIService.setCurrentMode('greeting');
+        }
     }
 
     private setIntentMode(): void {
         this.currentMode = 'intent';
         this.currentInstructions = this.instructionLoader.getIntentInstructions();
         console.log('[SYSTEM] Set mode to: INTENT');
-        this.openAIService.setCurrentMode('intent');
+        if (this.openAIService) {
+            this.openAIService.setCurrentMode('intent');
+        }
     }
 
     private setBotMode(intentConfig: any): void {
@@ -67,14 +71,18 @@ export class BotResource extends EventEmitter {
             this.currentInstructions = this.instructionLoader.getIntentInstructions();
         }
         console.log(`[SYSTEM] Set mode to: BOT (${intentConfig.name.toUpperCase()})`);
-        this.openAIService.setCurrentMode(`bot-${intentConfig.name}`);
+        if (this.openAIService) {
+            this.openAIService.setCurrentMode(`bot-${intentConfig.name}`);
+        }
     }
 
     private setHandoverMode(): void {
         this.currentMode = 'handover';
         this.currentInstructions = this.instructionLoader.getHandoverInstructions();
         console.log('[SYSTEM] Set mode to: HANDOVER');
-        this.openAIService.setCurrentMode('handover');
+        if (this.openAIService) {
+            this.openAIService.setCurrentMode('handover');
+        }
     }
 
     private updateSessionInstructions(): void {
