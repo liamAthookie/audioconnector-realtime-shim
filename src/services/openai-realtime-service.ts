@@ -357,6 +357,7 @@ export class OpenAIRealtimeService extends EventEmitter {
 
             case 'response.done':
                 console.log('Response generation completed:', this.currentResponseId);
+                console.log(`[${this.getCurrentMode().toUpperCase()} AGENT] Full response.done message:`, JSON.stringify(message, null, 2));
                 
                 if (!this.shouldInterruptResponse) {
                     this.isGeneratingResponse = false;
