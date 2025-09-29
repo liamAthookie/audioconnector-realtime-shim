@@ -12,13 +12,12 @@ export class IntentService {
     }
 
     private loadSupportedIntents(): void {
-        // Currently no supported intents - this can be expanded later
-        // Example of how to add intents:
-        // this.supportedIntents.set('billing_invoice', {
-        //     name: 'billing_invoice',
-        //     description: 'Handle billing and invoice inquiries',
-        //     botInstructionsFile: 'Billing_Agent_Instructions.md'
-        // });
+        // Add cancel subscription intent
+        this.supportedIntents.set('cancel_subscription', {
+            name: 'cancel_subscription',
+            description: 'Handle subscription cancellation requests',
+            botInstructionsFile: 'Cancel_Subscription_Agent_Instructions.md'
+        });
         
         console.log(`Loaded ${this.supportedIntents.size} supported intents`);
     }
