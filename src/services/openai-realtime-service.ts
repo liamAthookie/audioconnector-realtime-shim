@@ -337,16 +337,20 @@ export class OpenAIRealtimeService extends EventEmitter {
 
             case 'response.text.delta':
                 if (message.delta) {
+                    console.log(`[${this.getCurrentMode().toUpperCase()} AGENT] Text Delta: ${message.delta}`);
                     this.emit('text_delta', message.delta);
                 }
                 break;
 
             case 'response.text.done':
                 if (message.text && !this.shouldInterruptResponse) {
-                    console.log(`[${this.getCurrentMode().toUpperCase()} AGENT] Text Response: ${message.text}`);
+                    const currentMode = this.getCurrentMode().toUpperCase();
+                    console.log(`[${currentMode} AGENT] Text Response: ${message.text}`);
                     this.emit('text_response', message.text);
                 } else if (this.shouldInterruptResponse) {
                     console.log('Skipping text response due to interruption');
+                } else if (!message.text) {
+                    console.log(`[${this.getCurrentMode().toUpperCase()} AGENT] No text content in response`);
                 }
                 break;
 
