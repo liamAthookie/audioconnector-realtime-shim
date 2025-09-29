@@ -359,6 +359,22 @@ export class OpenAIRealtimeService extends EventEmitter {
                 console.log('Response generation completed:', this.currentResponseId);
                 console.log(`[${this.getCurrentMode().toUpperCase()} AGENT] Full response.done message:`, JSON.stringify(message, null, 2));
                 
+                // Extract and log the transcript from the response
+                try {
+                    if (message.response && 
+                        message.response.output && 
+                        message.response.output.length > 0 && 
+                        message.response.output[0].content && 
+                        message.response.output[0].content.length > 0 && 
+                        message.response.output[0].content[0].transcript) {
+                        
+                        const transcript = message.response.output[0].content[0].transcript;
+                        console.log(`[${this.getCurrentMode().toUpperCase()} AGENT] Agent said: "${transcript}"`);
+                    }
+                } catch (error) {
+                    console.log(`[${this.getCurrentMode().toUpperCase()} AGENT] Could not extract transcript from response`);
+                }
+                
                 if (!this.shouldInterruptResponse) {
                     this.isGeneratingResponse = false;
                     console.log(`[${this.getCurrentMode().toUpperCase()} AGENT] Audio response sent to customer`);
