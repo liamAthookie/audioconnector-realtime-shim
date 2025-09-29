@@ -244,8 +244,13 @@ export class Session {
                     // Listen for intent routing events
                     this.selectedBot.on('intent_routed', (routingInfo: any) => {
                         console.log('Intent routed in session:', routingInfo);
-                        // You can add custom logic here to handle the routed intent
-                        // For example, transfer to a specific queue, update session variables, etc.
+                        
+                        // Handle handover scenario
+                        if (routingInfo.isHandover) {
+                            console.log('Handover mode detected - preparing for session end');
+                            // You can add custom logic here for handover
+                            // For example, transfer to a specific queue, update session variables, etc.
+                        }
                     });
                 }
                 

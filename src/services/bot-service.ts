@@ -3,6 +3,8 @@ import { JsonStringMap } from '../protocol/core';
 import { BotTurnDisposition } from '../protocol/voice-bots';
 import { TTSService } from './tts-service';
 import { OpenAIRealtimeService, OpenAIRealtimeConfig } from './openai-realtime-service';
+import { IntentService } from './intent-service';
+import { InstructionLoaderService } from './instruction-loader-service';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -17,20 +19,24 @@ export interface BotResponse {
 export class BotResource extends EventEmitter {
     private openAIService: OpenAIRealtimeService;
     private ttsService = new TTSService();
+    private intentService = new IntentService();
+    private instructionLoader = new InstructionLoaderService();
     private audioCallback: ((audio: Uint8Array) => void) | null = null;
     private isInitialized = false;
-    private combinedInstructions: string = '';
+    private currentInstructions: string = '';
+    private isNewSession = true;
+    private currentMode: 'greeting' | 'intent' | 'bot' | 'handover' = 'greeting';
 
     constructor(private botId: string, private config: any) {
         super();
         
-        // Load and combine instructions
-        this.loadInstructions();
+        // Start with greeting instructions for new session
+        this.setGreetingMode();
         
         const openAIConfig: OpenAIRealtimeConfig = {
             apiKey: process.env.OPENAI_API_KEY || '',
             voice: 'alloy',
-            instructions: this.combinedInstructions,
+            instructions: this.currentInstructions,
             temperature: 0.7
         };
 
@@ -38,28 +44,49 @@ export class BotResource extends EventEmitter {
         this.setupOpenAIEventHandlers();
     }
 
-    private loadInstructions(): void {
-        try {
-            const instructionsDir = path.join(__dirname, '..', '..', 'instructions');
-            
-            // Load Global Agent Instructions
-            const globalInstructionsPath = path.join(instructionsDir, 'Global_Agent_Instructions.md');
-            const globalInstructions = fs.readFileSync(globalInstructionsPath, 'utf8');
-            
-            // Load Greeting Agent Instructions
-            const greetingInstructionsPath = path.join(instructionsDir, 'Greeting_Agent_Instructions.md');
-            const greetingInstructions = fs.readFileSync(greetingInstructionsPath, 'utf8');
-            
-            // Combine instructions
-            this.combinedInstructions = `${globalInstructions}\n\n${greetingInstructions}`;
-            
-            console.log('Successfully loaded and combined agent instructions');
-        } catch (error) {
-            console.error('Error loading instructions:', error);
-            // Fallback to default instructions
-            this.combinedInstructions = 'You are a helpful customer service assistant. Be concise, friendly, and professional in your responses. Keep responses brief and to the point.';
-        }
+    private setGreetingMode(): void {
+        this.currentMode = 'greeting';
+        this.currentInstructions = this.instructionLoader.getGreetingInstructions();
+        console.log('Set mode to: greeting');
     }
+
+    private setIntentMode(): void {
+        this.currentMode = 'intent';
+        this.currentInstructions = this.instructionLoader.getIntentInstructions();
+        console.log('Set mode to: intent');
+    }
+
+    private setBotMode(intentConfig: any): void {
+        this.currentMode = 'bot';
+        if (intentConfig.botInstructionsFile) {
+            this.currentInstructions = this.instructionLoader.loadBotInstructions(intentConfig.botInstructionsFile);
+        } else {
+            // Fallback to intent instructions if no specific bot instructions
+            this.currentInstructions = this.instructionLoader.getIntentInstructions();
+        }
+        console.log(`Set mode to: bot (${intentConfig.name})`);
+    }
+
+    private setHandoverMode(): void {
+        this.currentMode = 'handover';
+        this.currentInstructions = this.instructionLoader.getHandoverInstructions();
+        console.log('Set mode to: handover');
+    }
+
+    private updateSessionInstructions(): void {
+        if (!this.openAIService.isConnected) return;
+
+        const sessionUpdate = {
+            type: 'session.update',
+            session: {
+                instructions: this.currentInstructions
+            }
+        };
+
+        this.openAIService.ws?.send(JSON.stringify(sessionUpdate));
+        console.log(`Updated session instructions for mode: ${this.currentMode}`);
+    }
+
     private setupOpenAIEventHandlers(): void {
         this.openAIService.on('audio_response', (audioData: Uint8Array) => {
             console.log('Received audio response from OpenAI, sending to client');
@@ -97,8 +124,54 @@ export class BotResource extends EventEmitter {
 
         this.openAIService.on('intent_routed', (routingInfo: any) => {
             console.log('Intent routing received:', routingInfo);
-            // Emit to session for further processing
-            this.emit('intent_routed', routingInfo);
+            this.handleIntentRouting(routingInfo);
+        });
+    }
+
+    private handleIntentRouting(routingInfo: any): void {
+        const { intent, confidence } = routingInfo;
+        
+        console.log(`Processing intent: ${intent} with confidence: ${confidence}`);
+        
+        // Check if intent is unknown or unclear
+        if (intent === 'unclear' || intent === 'support_other' || confidence < 0.7) {
+            if (this.isNewSession) {
+                console.log('Unknown intent in new session - switching to greeting mode');
+                this.setGreetingMode();
+            } else {
+                console.log('Unknown intent in existing session - switching to intent mode');
+                this.setIntentMode();
+            }
+        } else {
+            // Check if we have a bot for this intent
+            const intentConfig = this.intentService.getIntentConfig(intent);
+            
+            if (intentConfig) {
+                console.log(`Found bot configuration for intent: ${intent}`);
+                this.setBotMode(intentConfig);
+            } else {
+                console.log(`No bot found for intent: ${intent} - switching to handover mode`);
+                this.setHandoverMode();
+                
+                // Schedule session end after handover response
+                setTimeout(() => {
+                    console.log('Ending session after handover');
+                    this.emit('session_end', 'handover_complete');
+                }, 5000); // Give time for handover message to be delivered
+            }
+        }
+        
+        // Update session with new instructions
+        this.updateSessionInstructions();
+        
+        // Mark session as no longer new after first intent processing
+        this.isNewSession = false;
+        
+        // Emit to session for further processing
+        this.emit('intent_routed', {
+            ...routingInfo,
+            mode: this.currentMode,
+            isHandover: this.currentMode === 'handover'
         });
     }
 
@@ -126,9 +199,9 @@ export class BotResource extends EventEmitter {
             await this.initialize();
         }
 
-        // Send initial greeting request to OpenAI with combined instructions
+        // Send initial greeting request to OpenAI
         if (this.openAIService.isConnected) {
-            // Create a system message with the combined instructions for greeting
+            // Create a system message for greeting
             const greetingMessage = {
                 type: 'conversation.item.create',
                 item: {
@@ -137,7 +210,7 @@ export class BotResource extends EventEmitter {
                     content: [
                         {
                             type: 'input_text',
-                            text: `${this.combinedInstructions}\n\nNow provide the initial greeting as specified in the greeting instructions.`
+                            text: 'Provide the initial greeting as specified in the greeting instructions.'
                         }
                     ]
                 }
@@ -150,7 +223,7 @@ export class BotResource extends EventEmitter {
                 type: 'response.create',
                 response: {
                     modalities: ['text', 'audio'],
-                    instructions: 'Follow the greeting agent instructions to provide the appropriate welcome message.'
+                    instructions: this.currentInstructions
                 }
             };
 
@@ -159,7 +232,7 @@ export class BotResource extends EventEmitter {
 
         return {
             disposition: 'match',
-            text: 'Welcome! Hej och välkommen! I can speak multiple languages. Please describe what you need help with.',
+            text: 'Initializing greeting...',
             confidence: 1.0
         };
     }
@@ -220,6 +293,14 @@ export class BotResource extends EventEmitter {
             this.openAIService.disconnect();
         }
         this.isInitialized = false;
+    }
+
+    getCurrentMode(): string {
+        return this.currentMode;
+    }
+
+    isHandoverMode(): boolean {
+        return this.currentMode === 'handover';
     }
 }
 
