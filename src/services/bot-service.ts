@@ -126,6 +126,14 @@ export class BotResource extends EventEmitter {
 
         this.openAIService.on('speech_started', () => {
             console.log('[USER] Started speaking');
+            
+            // Switch to intent mode as soon as user starts speaking (if still in greeting mode)
+            if (this.currentMode === 'greeting' && this.isNewSession) {
+                console.log('[SYSTEM] User started speaking - switching to intent mode');
+                this.setIntentMode();
+                this.updateSessionInstructions();
+                this.isNewSession = false;
+            }
         });
 
         this.openAIService.on('speech_stopped', () => {
