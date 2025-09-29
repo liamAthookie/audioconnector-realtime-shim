@@ -335,14 +335,14 @@ export class OpenAIRealtimeService extends EventEmitter {
                 this.audioBuffer = [];
                 break;
 
-            case 'response.text.delta':
+            case 'response.output_text.delta':
                 if (message.delta) {
                     console.log(`[${this.getCurrentMode().toUpperCase()} AGENT] Text Delta: ${message.delta}`);
                     this.emit('text_delta', message.delta);
                 }
                 break;
 
-            case 'response.text.done':
+            case 'response.output_text.done':
                 if (message.text && !this.shouldInterruptResponse) {
                     const currentMode = this.getCurrentMode().toUpperCase();
                     console.log(`[${currentMode} AGENT] Text Response: ${message.text}`);
