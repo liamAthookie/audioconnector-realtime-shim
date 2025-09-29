@@ -346,6 +346,7 @@ export class OpenAIRealtimeService extends EventEmitter {
                 if (message.text && !this.shouldInterruptResponse) {
                     const currentMode = this.getCurrentMode().toUpperCase();
                     console.log(`[${currentMode} AGENT] Text Response: ${message.text}`);
+                    console.log(`[${currentMode} AGENT] Full response.output_text.done message:`, JSON.stringify(message, null, 2));
                     this.emit('text_response', message.text);
                 } else if (this.shouldInterruptResponse) {
                     console.log('Skipping text response due to interruption');
