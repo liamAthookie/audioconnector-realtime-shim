@@ -138,6 +138,40 @@ export class BotResource extends EventEmitter {
         console.log('[SYSTEM] Handover message generation triggered');
     }
 
+    private generateBotResponse(entities: any): void {
+        if (!this.openAIService.isConnected) return;
+
+        console.log('[SYSTEM] Generating bot response with context');
+
+        // Create a system message with the entities to provide context
+        const contextMessage = {
+            type: 'conversation.item.create',
+            item: {
+                type: 'message',
+                role: 'system',
+                content: [
+                    {
+                        type: 'input_text',
+                        text: `You are now handling this request. Context from user: ${JSON.stringify(entities)}. Proceed according to your instructions.`
+                    }
+                ]
+            }
+        };
+
+        this.openAIService.ws?.send(JSON.stringify(contextMessage));
+
+        // Create response to generate the bot message
+        const responseMessage = {
+            type: 'response.create',
+            response: {
+                modalities: ['text', 'audio']
+            }
+        };
+
+        this.openAIService.ws?.send(JSON.stringify(responseMessage));
+        console.log('[SYSTEM] Bot response generation triggered');
+    }
+
     private setupOpenAIEventHandlers(): void {
         this.openAIService.on('audio_response', (audioData: Uint8Array) => {
             console.log(`[${this.currentMode.toUpperCase()} AGENT] Received audio response from OpenAI, sending to client`);
@@ -212,7 +246,7 @@ export class BotResource extends EventEmitter {
     }
 
     private handleIntentRouting(routingInfo: any): void {
-        const { intent, confidence } = routingInfo;
+        const { intent, confidence, entities } = routingInfo;
 
         console.log(`[SYSTEM] Processing intent: ${intent} with confidence: ${confidence}`);
 
@@ -231,10 +265,14 @@ export class BotResource extends EventEmitter {
         // Update session with new instructions
         this.updateSessionInstructions();
 
-        // If in handover mode, trigger the handover message generation
+        // Trigger response generation after session update
         if (this.currentMode === 'handover') {
             setTimeout(() => {
                 this.generateHandoverMessage();
+            }, 500); // Wait for session update to complete
+        } else if (this.currentMode === 'bot') {
+            setTimeout(() => {
+                this.generateBotResponse(entities);
             }, 500); // Wait for session update to complete
         }
 
