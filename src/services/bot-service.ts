@@ -27,6 +27,7 @@ export class BotResource extends EventEmitter {
     private isNewSession = true;
     private currentMode: 'greeting' | 'intent' | 'bot' | 'handover' = 'greeting';
     private waitingForHandoverResponse = false;
+    private handoverMessageTriggered = false;
 
     constructor(private botId: string, private config: any) {
         super();
@@ -105,6 +106,9 @@ export class BotResource extends EventEmitter {
 
         console.log('[SYSTEM] Generating handover message');
 
+        // Mark that we've triggered the handover message
+        this.handoverMessageTriggered = true;
+
         // Create a system message to trigger handover response
         const handoverTrigger = {
             type: 'conversation.item.create',
@@ -178,13 +182,16 @@ export class BotResource extends EventEmitter {
         this.openAIService.on('response_complete', () => {
             console.log(`[${this.currentMode.toUpperCase()} AGENT] Response complete`);
 
-            // If we're in handover mode and waiting for the handover response, end the session
-            if (this.currentMode === 'handover' && this.waitingForHandoverResponse) {
+            // Only end session if we're in handover mode AND we've actually triggered the handover message
+            if (this.currentMode === 'handover' && this.waitingForHandoverResponse && this.handoverMessageTriggered) {
                 console.log('[SYSTEM] Handover message delivered - ending session');
                 this.waitingForHandoverResponse = false;
+                this.handoverMessageTriggered = false;
                 setTimeout(() => {
                     this.emit('session_end', 'handover_complete');
                 }, 1000); // Brief delay to ensure audio is fully transmitted
+            } else if (this.currentMode === 'handover' && this.waitingForHandoverResponse && !this.handoverMessageTriggered) {
+                console.log('[SYSTEM] Ignoring response_complete - waiting for handover message to be triggered');
             }
         });
 
