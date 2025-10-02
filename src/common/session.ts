@@ -238,25 +238,31 @@ export class Session {
                     // Listen for intent routing events
                     this.selectedBot.on('intent_routed', (routingInfo: any) => {
                         console.log('Intent routed in session:', routingInfo);
-                        
+
+                        // Always set the Intent output variable for Genesys
+                        const outputVariables: JsonStringMap = {
+                            'Intent': routingInfo.intent
+                        };
+
                         // Handle handover scenario
                         if (routingInfo.isHandover) {
                             console.log('Handover mode detected - preparing to transfer to Genesys');
-                            // You can add custom logic here for handover
-                            // For example, transfer to a specific queue, update session variables, etc.
 
-                            // Set output variables for Genesys to handle the transfer
-                            const outputVariables: JsonStringMap = {
-                                'Intent': routingInfo.intent,
-                                'transfer_reason': 'unsupported_intent',
-                                'original_intent': routingInfo.intent,
-                                'intent_confidence': routingInfo.confidence?.toString() || '0',
-                                'customer_summary': routingInfo.summary || 'Customer needs specialized assistance'
-                            };
+                            // Add additional context for handover
+                            outputVariables['transfer_reason'] = 'unsupported_intent';
+                            outputVariables['original_intent'] = routingInfo.intent;
+                            outputVariables['intent_confidence'] = routingInfo.confidence?.toString() || '0';
+                            outputVariables['customer_summary'] = routingInfo.summary || 'Customer needs specialized assistance';
+                        } else {
+                            console.log('Bot mode detected - intent will be handled by specialized agent');
 
-                            // Store output variables for when session ends
-                            this.setOutputVariables(outputVariables);
+                            // Add context for bot-handled intents
+                            outputVariables['intent_confidence'] = routingInfo.confidence?.toString() || '0';
+                            outputVariables['customer_summary'] = routingInfo.summary || '';
                         }
+
+                        // Store output variables for when session ends
+                        this.setOutputVariables(outputVariables);
                     });
                 }
                 
