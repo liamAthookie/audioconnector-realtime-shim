@@ -100,6 +100,40 @@ export class BotResource extends EventEmitter {
         console.log(`[SYSTEM] Updated session instructions for mode: ${this.currentMode.toUpperCase()}`);
     }
 
+    private generateHandoverMessage(): void {
+        if (!this.openAIService.isConnected) return;
+
+        console.log('[SYSTEM] Generating handover message');
+
+        // Create a system message to trigger handover response
+        const handoverTrigger = {
+            type: 'conversation.item.create',
+            item: {
+                type: 'message',
+                role: 'system',
+                content: [
+                    {
+                        type: 'input_text',
+                        text: 'Provide a professional handover message as specified in your instructions.'
+                    }
+                ]
+            }
+        };
+
+        this.openAIService.ws?.send(JSON.stringify(handoverTrigger));
+
+        // Create response to generate the handover message
+        const responseMessage = {
+            type: 'response.create',
+            response: {
+                modalities: ['text', 'audio']
+            }
+        };
+
+        this.openAIService.ws?.send(JSON.stringify(responseMessage));
+        console.log('[SYSTEM] Handover message generation triggered');
+    }
+
     private setupOpenAIEventHandlers(): void {
         this.openAIService.on('audio_response', (audioData: Uint8Array) => {
             console.log(`[${this.currentMode.toUpperCase()} AGENT] Received audio response from OpenAI, sending to client`);
@@ -189,6 +223,13 @@ export class BotResource extends EventEmitter {
 
         // Update session with new instructions
         this.updateSessionInstructions();
+
+        // If in handover mode, trigger the handover message generation
+        if (this.currentMode === 'handover') {
+            setTimeout(() => {
+                this.generateHandoverMessage();
+            }, 500); // Wait for session update to complete
+        }
 
         // Mark session as no longer new after first intent processing
         this.isNewSession = false;

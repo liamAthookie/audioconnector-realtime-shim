@@ -424,24 +424,25 @@ export class OpenAIRealtimeService extends EventEmitter {
 
     private handleRouteIntent(callId: string, args: any): void {
         console.log('Processing route_intent with args:', args);
-        
+
         // Validate required fields
         const requiredFields = ['intent', 'confidence', 'urgency', 'sentiment', 'summary'];
         const missingFields = requiredFields.filter(field => !(field in args));
-        
+
         if (missingFields.length > 0) {
             console.error('Missing required fields:', missingFields);
-            this.sendFunctionCallResult(callId, { 
-                error: `Missing required fields: ${missingFields.join(', ')}` 
+            this.sendFunctionCallResult(callId, {
+                error: `Missing required fields: ${missingFields.join(', ')}`,
+                createResponse: true
             });
             return;
         }
-        
+
         // Ensure entities field exists, even if empty
         if (!args.entities) {
             args.entities = {};
         }
-        
+
         // Emit the routing information for the session to handle
         this.emit('intent_routed', {
             intent: args.intent,
@@ -451,15 +452,16 @@ export class OpenAIRealtimeService extends EventEmitter {
             sentiment: args.sentiment,
             summary: args.summary
         });
-        
-        // Send success response back to OpenAI
+
+        // Send success response back to OpenAI WITHOUT creating a response
+        // The bot service will handle creating the appropriate response based on mode
         this.sendFunctionCallResult(callId, {
             success: true,
             message: `Intent routing processed. Switching to appropriate mode based on intent support.`
-        });
+        }, false);
     }
 
-    private sendFunctionCallResult(callId: string, result: any): void {
+    private sendFunctionCallResult(callId: string, result: any, createResponse: boolean = true): void {
         if (!this._ws || !this._isConnected) return;
 
         const message = {
@@ -472,16 +474,18 @@ export class OpenAIRealtimeService extends EventEmitter {
         };
 
         this._ws.send(JSON.stringify(message));
-        
-        // Create a response to continue the conversation
-        const responseMessage = {
-            type: 'response.create',
-            response: {
-                modalities: ['text', 'audio']
-            }
-        };
 
-        this._ws.send(JSON.stringify(responseMessage));
+        // Only create a response if explicitly requested
+        if (createResponse) {
+            const responseMessage = {
+                type: 'response.create',
+                response: {
+                    modalities: ['text', 'audio']
+                }
+            };
+
+            this._ws.send(JSON.stringify(responseMessage));
+        }
     }
 
     private getCurrentMode(): string {
