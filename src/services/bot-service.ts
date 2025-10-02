@@ -26,6 +26,7 @@ export class BotResource extends EventEmitter {
     private currentInstructions: string = '';
     private isNewSession = true;
     private currentMode: 'greeting' | 'intent' | 'bot' | 'handover' = 'greeting';
+    private waitingForHandoverResponse = false;
 
     constructor(private botId: string, private config: any) {
         super();
@@ -140,6 +141,19 @@ export class BotResource extends EventEmitter {
             console.log('[USER] Stopped speaking');
         });
 
+        this.openAIService.on('response_complete', () => {
+            console.log(`[${this.currentMode.toUpperCase()} AGENT] Response complete`);
+
+            // If we're in handover mode and waiting for the handover response, end the session
+            if (this.currentMode === 'handover' && this.waitingForHandoverResponse) {
+                console.log('[SYSTEM] Handover message delivered - ending session');
+                this.waitingForHandoverResponse = false;
+                setTimeout(() => {
+                    this.emit('session_end', 'handover_complete');
+                }, 1000); // Brief delay to ensure audio is fully transmitted
+            }
+        });
+
         this.openAIService.on('session_timeout', (reason: string) => {
             console.log(`[SYSTEM] Session timeout: ${reason}`);
             this.emit('session_end', reason);
@@ -158,32 +172,27 @@ export class BotResource extends EventEmitter {
 
     private handleIntentRouting(routingInfo: any): void {
         const { intent, confidence } = routingInfo;
-        
+
         console.log(`[SYSTEM] Processing intent: ${intent} with confidence: ${confidence}`);
-        
+
         // Check if we have a bot for this intent
         const intentConfig = this.intentService.getIntentConfig(intent);
-        
+
         if (intentConfig) {
             console.log(`[SYSTEM] Found bot configuration for intent: ${intent}`);
             this.setBotMode(intentConfig);
         } else {
             console.log(`[SYSTEM] Intent '${intent}' is not supported - switching to handover mode`);
             this.setHandoverMode();
-            
-            // Schedule session end after handover response
-            setTimeout(() => {
-                console.log('[SYSTEM] Ending session after handover');
-                this.emit('session_end', 'handover_complete');
-            }, 3000); // Give time for handover message to be delivered
+            this.waitingForHandoverResponse = true;
         }
-        
+
         // Update session with new instructions
         this.updateSessionInstructions();
-        
+
         // Mark session as no longer new after first intent processing
         this.isNewSession = false;
-        
+
         // Emit to session for further processing
         this.emit('intent_routed', {
             ...routingInfo,
