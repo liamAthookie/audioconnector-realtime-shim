@@ -138,13 +138,13 @@ export class BotResource extends EventEmitter {
         console.log('[SYSTEM] Handover message generation triggered');
     }
 
-    private generateBotResponse(entities: any): void {
+    private generateBotResponse(): void {
         if (!this.openAIService.isConnected) return;
 
-        console.log('[SYSTEM] Generating bot response with context');
+        console.log('[SYSTEM] Generating bot response');
 
-        // Create a system message with the entities to provide context
-        const contextMessage = {
+        // Create a system message to trigger bot response
+        const botTrigger = {
             type: 'conversation.item.create',
             item: {
                 type: 'message',
@@ -152,13 +152,13 @@ export class BotResource extends EventEmitter {
                 content: [
                     {
                         type: 'input_text',
-                        text: `You are now handling this request. Context from user: ${JSON.stringify(entities)}. Proceed according to your instructions.`
+                        text: 'Continue the conversation according to your instructions.'
                     }
                 ]
             }
         };
 
-        this.openAIService.ws?.send(JSON.stringify(contextMessage));
+        this.openAIService.ws?.send(JSON.stringify(botTrigger));
 
         // Create response to generate the bot message
         const responseMessage = {
@@ -272,7 +272,7 @@ export class BotResource extends EventEmitter {
             }, 500); // Wait for session update to complete
         } else if (this.currentMode === 'bot') {
             setTimeout(() => {
-                this.generateBotResponse(entities);
+                this.generateBotResponse();
             }, 500); // Wait for session update to complete
         }
 
