@@ -18,7 +18,6 @@
         "summary": { "type": "string" }
       },
       "required": ["intent", "confidence", "entities", "urgency", "sentiment", "summary"],
-      "required": ["intent", "confidence", "urgency", "sentiment", "summary"],
       "additionalProperties": false
     }
   }
