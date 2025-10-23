@@ -392,6 +392,13 @@ export class OpenAIRealtimeService extends EventEmitter {
                 break;
 
             case 'error':
+                // Ignore response_cancel_not_active errors - these are expected when
+                // a response completes naturally before our cancel message is processed
+                if (message.error?.code === 'response_cancel_not_active') {
+                    console.log('Response cancel skipped - response already completed');
+                    break;
+                }
+
                 console.error('OpenAI API error:', message.error);
                 this.emit('error', message.error);
                 break;
