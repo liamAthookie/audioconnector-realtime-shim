@@ -399,7 +399,24 @@ export class OpenAIRealtimeService extends EventEmitter {
 
             case 'response.function_call_arguments.done':
                 console.log('Function call arguments completed:', message.arguments);
-                this.handleFunctionCall(message.call_id, message.name, message.arguments);
+                // Don't intercept MCP function calls - let OpenAI handle them automatically
+                if (!message.name.startsWith('mcp_')) {
+                    this.handleFunctionCall(message.call_id, message.name, message.arguments);
+                } else {
+                    console.log(`MCP function call detected: ${message.name} - OpenAI will handle automatically`);
+                }
+                break;
+
+            case 'response.mcp_call.started':
+                console.log('MCP call started:', message);
+                break;
+
+            case 'response.mcp_call.completed':
+                console.log('MCP call completed successfully:', JSON.stringify(message, null, 2));
+                break;
+
+            case 'response.mcp_call.failed':
+                console.error('MCP call failed:', JSON.stringify(message, null, 2));
                 break;
 
             case 'error':
@@ -415,7 +432,10 @@ export class OpenAIRealtimeService extends EventEmitter {
                 break;
 
             default:
-                // console.log('Unhandled OpenAI message type:', message.type);
+                console.log('Unhandled OpenAI message type:', message.type);
+                if (message.type && message.type.includes('mcp')) {
+                    console.log('MCP event details:', JSON.stringify(message, null, 2));
+                }
                 break;
         }
     }
