@@ -422,14 +422,20 @@ export class OpenAIRealtimeService extends EventEmitter {
 
     private handleFunctionCall(callId: string, functionName: string, argumentsJson: string): void {
         console.log(`Function call received: ${functionName} with call ID: ${callId}`);
-        
+
         try {
             const args = JSON.parse(argumentsJson);
             console.log('Function arguments:', args);
-            
+
             // Handle the route_intent function call
             if (functionName === 'route_intent') {
                 this.handleRouteIntent(callId, args);
+            } else if (functionName.startsWith('mcp_')) {
+                // MCP function calls should be handled by OpenAI automatically
+                // We shouldn't receive these if require_approval is set to 'never'
+                // Log for debugging purposes
+                console.log(`MCP function call detected: ${functionName} - This should be handled automatically by OpenAI`);
+                // Don't send a response - let OpenAI handle it
             } else {
                 console.warn(`Unknown function called: ${functionName}`);
                 this.sendFunctionCallResult(callId, { error: 'Unknown function' });
