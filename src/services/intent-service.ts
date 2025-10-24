@@ -18,7 +18,14 @@ export class IntentService {
             description: 'Handle subscription cancellation requests',
             botInstructionsFile: 'Cancel_Subscription_Agent_Instructions.md'
         });
-        
+
+        // Add billing invoice intent
+        this.supportedIntents.set('billing_invoice', {
+            name: 'billing_invoice',
+            description: 'Handle billing and invoice inquiries using MCP server tools',
+            botInstructionsFile: 'Billing_Invoice_Agent_Instructions.md'
+        });
+
         console.log(`Loaded ${this.supportedIntents.size} supported intents`);
     }
 
