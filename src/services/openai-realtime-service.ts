@@ -190,14 +190,25 @@ export class OpenAIRealtimeService extends EventEmitter {
                     prefix_padding_ms: 200,
                     silence_duration_ms: 800
                 },
-                temperature: this.config.temperature
+                temperature: this.config.temperature,
+                tools: []
             }
         };
 
-        // Add tools if available
+        // Add MCP server for billing account mock
+        const mcpTool = {
+            type: 'mcp',
+            server_label: 'billing_account',
+            server_url: 'https://billing-account-mcp-mock.fly.dev/mcp',
+            require_approval: 'never'
+        };
+        sessionConfig.session.tools.push(mcpTool);
+        console.log('Added MCP server: billing_account');
+
+        // Add custom tools if available
         if (this.tools.length > 0) {
-            sessionConfig.session.tools = this.tools;
-            console.log(`Adding ${this.tools.length} tools to session configuration`);
+            sessionConfig.session.tools.push(...this.tools);
+            console.log(`Adding ${this.tools.length} custom tools to session configuration`);
         }
 
         this._ws.send(JSON.stringify(sessionConfig));
