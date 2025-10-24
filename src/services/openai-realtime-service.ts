@@ -413,6 +413,9 @@ export class OpenAIRealtimeService extends EventEmitter {
 
             case 'response.mcp_call.completed':
                 console.log('MCP call completed successfully:', JSON.stringify(message, null, 2));
+                // Trigger a new response after MCP call completes so the agent can use the result
+                console.log('Triggering new response after MCP call completion');
+                this.createResponse();
                 break;
 
             case 'response.mcp_call.failed':
