@@ -181,27 +181,7 @@ export class OpenAIRealtimeService extends EventEmitter {
         console.log('[MCP] Approval required:', mcpTool.require_approval);
 
         this._ws.send(JSON.stringify(sessionConfig));
-
-        // Add a system message to instruct the agent to check MCP resources
-        setTimeout(() => {
-            if (!this._ws) return;
-            console.log('[MCP] Adding system message to prompt agent to read MCP resources');
-            const systemMessage = {
-                type: 'conversation.item.create',
-                item: {
-                    type: 'message',
-                    role: 'system',
-                    content: [
-                        {
-                            type: 'input_text',
-                            text: 'You have access to an MCP server called "billing_account". When you greet the customer, read any available prompts or resources from this MCP server to understand what tools and capabilities you have. This will help you assist customers with billing and account-related requests.'
-                        }
-                    ]
-                }
-            };
-            this._ws.send(JSON.stringify(systemMessage));
-            console.log('[MCP] System message sent');
-        }, 100);
+        console.log('[MCP] Session configuration sent to OpenAI');
     }
 
     private handleMessage(message: any): void {
