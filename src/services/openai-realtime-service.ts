@@ -178,6 +178,25 @@ export class OpenAIRealtimeService extends EventEmitter {
         console.log('Added MCP server: billing_account');
 
         this._ws.send(JSON.stringify(sessionConfig));
+
+        // Add a system message to instruct the agent to check MCP resources
+        setTimeout(() => {
+            if (!this._ws) return;
+            const systemMessage = {
+                type: 'conversation.item.create',
+                item: {
+                    type: 'message',
+                    role: 'system',
+                    content: [
+                        {
+                            type: 'input_text',
+                            text: 'You have access to an MCP server called "billing_account". When you greet the customer, read any available prompts or resources from this MCP server to understand what tools and capabilities you have. This will help you assist customers with billing and account-related requests.'
+                        }
+                    ]
+                }
+            };
+            this._ws.send(JSON.stringify(systemMessage));
+        }, 100);
     }
 
     private handleMessage(message: any): void {
