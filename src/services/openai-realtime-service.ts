@@ -39,8 +39,6 @@ export class OpenAIRealtimeService extends EventEmitter {
     private responseDebounceTimeout: NodeJS.Timeout | null = null;
     private flagsmithService: FlagsmithService;
 
-    // Tools configuration
-    private tools: any[] = [];
 
     // Public getters for accessing private properties
     get ws(): WebSocket | null {
@@ -65,32 +63,6 @@ export class OpenAIRealtimeService extends EventEmitter {
         });
         
         this.flagsmithService = new FlagsmithService();
-        
-        // Load tools on initialization
-        this.loadTools();
-    }
-
-    private loadTools(): void {
-        try {
-            const toolsPath = path.join(__dirname, '..', '..', 'tools', 'tools.json');
-            
-            if (fs.existsSync(toolsPath)) {
-                const toolsData = fs.readFileSync(toolsPath, 'utf8');
-                this.tools = JSON.parse(toolsData);
-                console.log(`Loaded ${this.tools.length} tools from tools.json`);
-                
-                // Log tool names for debugging
-                this.tools.forEach(tool => {
-                    console.log(`- Tool: ${tool.name} (${tool.description})`);
-                });
-            } else {
-                console.log('No tools.json file found, proceeding without tools');
-                this.tools = [];
-            }
-        } catch (error) {
-            console.error('Error loading tools:', error);
-            this.tools = [];
-        }
     }
 
     async connect(): Promise<void> {
@@ -204,12 +176,6 @@ export class OpenAIRealtimeService extends EventEmitter {
         };
         sessionConfig.session.tools.push(mcpTool);
         console.log('Added MCP server: billing_account');
-
-        // Add custom tools if available
-        if (this.tools.length > 0) {
-            sessionConfig.session.tools.push(...this.tools);
-            console.log(`Adding ${this.tools.length} custom tools to session configuration`);
-        }
 
         this._ws.send(JSON.stringify(sessionConfig));
     }
@@ -346,21 +312,20 @@ export class OpenAIRealtimeService extends EventEmitter {
 
             case 'response.output_text.delta':
                 if (message.delta) {
-                    console.log(`[${this.getCurrentMode().toUpperCase()} AGENT] Text Delta: ${message.delta}`);
+                    console.log(`[GREETING AGENT] Text Delta: ${message.delta}`);
                     this.emit('text_delta', message.delta);
                 }
                 break;
 
             case 'response.output_text.done':
                 if (message.text && !this.shouldInterruptResponse) {
-                    const currentMode = this.getCurrentMode().toUpperCase();
-                    console.log(`[${currentMode} AGENT] Text Response: ${message.text}`);
-                    console.log(`[${currentMode} AGENT] Full response.output_text.done message:`, JSON.stringify(message, null, 2));
+                    console.log('[GREETING AGENT] Text Response:', message.text);
+                    console.log('[GREETING AGENT] Full response.output_text.done message:', JSON.stringify(message, null, 2));
                     this.emit('text_response', message.text);
                 } else if (this.shouldInterruptResponse) {
                     console.log('Skipping text response due to interruption');
                 } else if (!message.text) {
-                    console.log(`[${this.getCurrentMode().toUpperCase()} AGENT] No text content in response`);
+                    console.log('[GREETING AGENT] No text content in response');
                 }
                 break;
 
@@ -375,15 +340,15 @@ export class OpenAIRealtimeService extends EventEmitter {
                         message.response.output[0].content[0].transcript) {
                         
                         const transcript = message.response.output[0].content[0].transcript;
-                        console.log(`[${this.getCurrentMode().toUpperCase()} AGENT] Agent said: "${transcript}"`);
+                        console.log(`[GREETING AGENT] Agent said: "${transcript}"`);
                     }
                 } catch (error) {
-                    console.log(`[${this.getCurrentMode().toUpperCase()} AGENT] Could not extract transcript from response`);
+                    console.log('[GREETING AGENT] Could not extract transcript from response');
                 }
                 
                 if (!this.shouldInterruptResponse) {
                     this.isGeneratingResponse = false;
-                    console.log(`[${this.getCurrentMode().toUpperCase()} AGENT] Audio response sent to customer`);
+                    console.log('[GREETING AGENT] Audio response sent to customer');
                     this.emit('response_complete');
                 } else {
                     console.log('Response was interrupted, not emitting completion');
@@ -399,12 +364,7 @@ export class OpenAIRealtimeService extends EventEmitter {
 
             case 'response.function_call_arguments.done':
                 console.log('Function call arguments completed:', message.arguments);
-                // Don't intercept MCP function calls - let OpenAI handle them automatically
-                if (!message.name.startsWith('mcp_')) {
-                    this.handleFunctionCall(message.call_id, message.name, message.arguments);
-                } else {
-                    console.log(`MCP function call detected: ${message.name} - OpenAI will handle automatically`);
-                }
+                console.log(`MCP function call detected: ${message.name} - OpenAI will handle automatically`);
                 break;
 
             case 'response.mcp_call.started':
@@ -443,109 +403,6 @@ export class OpenAIRealtimeService extends EventEmitter {
         }
     }
 
-    private handleFunctionCall(callId: string, functionName: string, argumentsJson: string): void {
-        console.log(`Function call received: ${functionName} with call ID: ${callId}`);
-
-        try {
-            const args = JSON.parse(argumentsJson);
-            console.log('Function arguments:', args);
-
-            // Handle the route_intent function call
-            if (functionName === 'route_intent') {
-                this.handleRouteIntent(callId, args);
-            } else if (functionName.startsWith('mcp_')) {
-                // MCP function calls should be handled by OpenAI automatically
-                // We shouldn't receive these if require_approval is set to 'never'
-                // Log for debugging purposes
-                console.log(`MCP function call detected: ${functionName} - This should be handled automatically by OpenAI`);
-                // Don't send a response - let OpenAI handle it
-            } else {
-                console.warn(`Unknown function called: ${functionName}`);
-                this.sendFunctionCallResult(callId, { error: 'Unknown function' });
-            }
-        } catch (error) {
-            console.error('Error parsing function arguments:', error);
-            this.sendFunctionCallResult(callId, { error: 'Invalid arguments' });
-        }
-    }
-
-    private handleRouteIntent(callId: string, args: any): void {
-        console.log('Processing route_intent with args:', args);
-
-        // Validate required fields
-        const requiredFields = ['intent', 'confidence', 'urgency', 'sentiment', 'summary'];
-        const missingFields = requiredFields.filter(field => !(field in args));
-
-        if (missingFields.length > 0) {
-            console.error('Missing required fields:', missingFields);
-            this.sendFunctionCallResult(callId, {
-                error: `Missing required fields: ${missingFields.join(', ')}`,
-                createResponse: true
-            });
-            return;
-        }
-
-        // Ensure entities field exists, even if empty
-        if (!args.entities) {
-            args.entities = {};
-        }
-
-        // Emit the routing information for the session to handle
-        this.emit('intent_routed', {
-            intent: args.intent,
-            confidence: args.confidence,
-            entities: args.entities,
-            urgency: args.urgency,
-            sentiment: args.sentiment,
-            summary: args.summary
-        });
-
-        // Send success response back to OpenAI WITHOUT creating a response
-        // The bot service will handle creating the appropriate response based on mode
-        this.sendFunctionCallResult(callId, {
-            success: true,
-            message: `Intent routing processed. Switching to appropriate mode based on intent support.`
-        }, false);
-    }
-
-    private sendFunctionCallResult(callId: string, result: any, createResponse: boolean = true): void {
-        if (!this._ws || !this._isConnected) return;
-
-        const message = {
-            type: 'conversation.item.create',
-            item: {
-                type: 'function_call_output',
-                call_id: callId,
-                output: JSON.stringify(result)
-            }
-        };
-
-        this._ws.send(JSON.stringify(message));
-
-        // Only create a response if explicitly requested
-        if (createResponse) {
-            const responseMessage = {
-                type: 'response.create',
-                response: {
-                    modalities: ['text', 'audio']
-                }
-            };
-
-            this._ws.send(JSON.stringify(responseMessage));
-        }
-    }
-
-    private getCurrentMode(): string {
-        // This will be set by the bot service when mode changes
-        return this.currentMode || 'unknown';
-    }
-
-    setCurrentMode(mode: string): void {
-        this.currentMode = mode;
-        console.log(`[SYSTEM] Agent mode changed to: ${mode.toUpperCase()}`);
-    }
-
-    private currentMode: string = 'greeting';
 
     private async checkModeration(text: string): Promise<boolean> {
         try {
