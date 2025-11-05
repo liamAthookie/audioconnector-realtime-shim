@@ -185,6 +185,11 @@ export class OpenAIRealtimeService extends EventEmitter {
     }
 
     private handleMessage(message: any): void {
+        // Log all message types to debug audio issue
+        if (message.type.startsWith('response.')) {
+            console.log('[DEBUG] OpenAI message type:', message.type);
+        }
+
         switch (message.type) {
             case 'session.created':
                 console.log('OpenAI session created');
