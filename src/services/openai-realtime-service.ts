@@ -409,51 +409,39 @@ export class OpenAIRealtimeService extends EventEmitter {
 
             case 'response.mcp_call.started':
                 console.log('[MCP] Call started');
-                console.log('[MCP] Server:', message.server_label);
-                console.log('[MCP] Tool:', message.tool_name);
-                console.log('[MCP] Arguments:', JSON.stringify(message.arguments, null, 2));
+                console.log('[MCP] Full message:', JSON.stringify(message, null, 2));
                 break;
 
             case 'response.mcp_call.completed':
                 console.log('[MCP] Call completed successfully');
-                console.log('[MCP] Server:', message.server_label);
-                console.log('[MCP] Tool:', message.tool_name);
-                console.log('[MCP] Result:', JSON.stringify(message.result, null, 2));
+                console.log('[MCP] Full message:', JSON.stringify(message, null, 2));
                 console.log('[MCP] Triggering new response to process the result');
                 this.createResponse();
                 break;
 
             case 'response.mcp_call.failed':
                 console.error('[MCP] Call failed');
-                console.error('[MCP] Server:', message.server_label);
-                console.error('[MCP] Tool:', message.tool_name);
-                console.error('[MCP] Error:', JSON.stringify(message.error, null, 2));
+                console.error('[MCP] Full message:', JSON.stringify(message, null, 2));
                 break;
 
             case 'mcp.resource.read':
                 console.log('[MCP] Resource read request');
-                console.log('[MCP] Server:', message.server_label);
-                console.log('[MCP] Resource URI:', message.uri);
+                console.log('[MCP] Full message:', JSON.stringify(message, null, 2));
                 break;
 
             case 'mcp.resource.read.completed':
                 console.log('[MCP] Resource read completed');
-                console.log('[MCP] Server:', message.server_label);
-                console.log('[MCP] Resource URI:', message.uri);
-                console.log('[MCP] Content:', JSON.stringify(message.content, null, 2));
+                console.log('[MCP] Full message:', JSON.stringify(message, null, 2));
                 break;
 
             case 'mcp.prompt.read':
                 console.log('[MCP] Prompt read request');
-                console.log('[MCP] Server:', message.server_label);
-                console.log('[MCP] Prompt name:', message.name);
+                console.log('[MCP] Full message:', JSON.stringify(message, null, 2));
                 break;
 
             case 'mcp.prompt.read.completed':
                 console.log('[MCP] Prompt read completed');
-                console.log('[MCP] Server:', message.server_label);
-                console.log('[MCP] Prompt name:', message.name);
-                console.log('[MCP] Messages:', JSON.stringify(message.messages, null, 2));
+                console.log('[MCP] Full message:', JSON.stringify(message, null, 2));
                 break;
 
             case 'error':
