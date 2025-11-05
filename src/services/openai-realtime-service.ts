@@ -432,6 +432,14 @@ export class OpenAIRealtimeService extends EventEmitter {
                     break;
                 }
 
+                // Ignore input_audio_buffer_commit_empty errors - these happen when
+                // Server VAD detects very brief audio (< 100ms) like background noise
+                // This is normal and shouldn't crash the session
+                if (message.error?.code === 'input_audio_buffer_commit_empty') {
+                    console.log('Empty audio buffer detected (likely background noise) - ignoring');
+                    break;
+                }
+
                 console.error('OpenAI API error:', message.error);
                 this.emit('error', message.error);
                 break;
