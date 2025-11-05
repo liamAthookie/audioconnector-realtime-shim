@@ -106,29 +106,12 @@ export class BotResource extends EventEmitter {
 
         // Send initial greeting request to OpenAI
         if (this.openAIService.isConnected) {
-            // Create a system message for greeting
-            const greetingMessage = {
-                type: 'conversation.item.create',
-                item: {
-                    type: 'message',
-                    role: 'system',
-                    content: [
-                        {
-                            type: 'input_text',
-                            text: 'Provide the initial greeting as specified in the greeting instructions.'
-                        }
-                    ]
-                }
-            };
-
-            this.openAIService.ws?.send(JSON.stringify(greetingMessage));
-            
-            // Create response to generate the greeting
+            // Create response to generate the greeting based on instructions
+            // The instructions already tell the model to greet the user
             const responseMessage = {
                 type: 'response.create',
                 response: {
-                    modalities: ['text', 'audio'],
-                    instructions: this.currentInstructions
+                    modalities: ['text', 'audio']
                 }
             };
 
