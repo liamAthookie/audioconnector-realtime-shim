@@ -185,11 +185,6 @@ export class OpenAIRealtimeService extends EventEmitter {
     }
 
     private handleMessage(message: any): void {
-        // Log all message types to debug audio issue
-        if (message.type.startsWith('response.')) {
-            console.log('[DEBUG] OpenAI message type:', message.type);
-        }
-
         switch (message.type) {
             case 'session.created':
                 console.log('OpenAI session created');
@@ -302,7 +297,6 @@ export class OpenAIRealtimeService extends EventEmitter {
                 break;
 
             case 'response.created':
-                console.log('[DEBUG] Response created:', JSON.stringify(message.response, null, 2));
                 this.currentResponseId = message.response.id;
                 this.isGeneratingResponse = true;
                 this.shouldInterruptResponse = false;
@@ -310,7 +304,6 @@ export class OpenAIRealtimeService extends EventEmitter {
                 break;
 
             case 'response.audio.delta':
-                console.log('[DEBUG] Received audio delta');
                 if (message.delta) {
                     // Check if this response should be interrupted
                     if (this.shouldInterruptResponse) {
@@ -325,7 +318,6 @@ export class OpenAIRealtimeService extends EventEmitter {
                 break;
 
             case 'response.audio.done':
-                console.log('[DEBUG] Audio done. Buffer length:', this.audioBuffer.length);
                 if (this.audioBuffer.length > 0 && !this.shouldInterruptResponse) {
                     const completeAudio = Buffer.concat(this.audioBuffer);
                     this.emit('audio_response', completeAudio);
@@ -357,9 +349,6 @@ export class OpenAIRealtimeService extends EventEmitter {
                 break;
 
             case 'response.done':
-                // Log the full response to debug why there's no audio
-                console.log('[DEBUG] response.done full message:', JSON.stringify(message, null, 2));
-
                 // Extract and log the transcript from the response
                 try {
                     if (message.response &&
