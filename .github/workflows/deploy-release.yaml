@@ -1,0 +1,59 @@
+name: Fly Deploy Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to deploy (tag/branch/commit SHA)"
+        required: true
+        default: "v1.0.0"
+
+concurrency:
+  group: fly-release-${{ github.event.inputs.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      FLY_APP: audioconnector-realtime-shim
+      FLY_ORG: personal # <-- change if needed
+    steps:
+      - name: Check out requested ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref }}
+
+      - uses: superfly/flyctl-actions/setup-flyctl@v1
+
+      - name: Ensure Fly app exists
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -e
+          if ! flyctl apps list --json | jq -e ".[] | select(.Name==\"$FLY_APP\")" > /dev/null; then
+            echo "Creating app $FLY_APP in org $FLY_ORG..."
+            flyctl apps create "$FLY_APP" --org "$FLY_ORG"
+          else
+            echo "App $FLY_APP already exists."
+          fi
+
+      - name: Set Fly secrets
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          API_KEY: ${{ secrets.API_KEY }}
+          API_SECRET: ${{ secrets.API_SECRET }}
+          FLAGSMITH_API_KEY: ${{ secrets.FLAGSMITH_API_KEY }}
+        run: |
+          flyctl secrets set OPENAI_API_KEY="$OPENAI_API_KEY" --stage --app "$FLY_APP"
+          flyctl secrets set API_KEY="$API_KEY" --stage --app "$FLY_APP"
+          flyctl secrets set API_SECRET="$API_SECRET" --stage --app "$FLY_APP"
+          flyctl secrets set FLAGSMITH_API_KEY="$FLAGSMITH_API_KEY" --stage --app "$FLY_APP"
+
+      - name: Deploy
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          echo "Deploying ref ${{ github.event.inputs.ref }} to Fly.io..."
+          flyctl deploy --remote-only
