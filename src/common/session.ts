@@ -112,7 +112,6 @@ export class Session {
         const handler = this.messageHandlerRegistry.getHandler(message.type);
 
         if (!handler) {
-            console.log(`Cannot find a message handler for '${message.type}'.`);
             return;
         }
 
