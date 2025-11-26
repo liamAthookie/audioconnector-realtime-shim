@@ -106,25 +106,8 @@ export class BotResource extends EventEmitter {
 
         // Send initial greeting request to OpenAI
         if (this.openAIService.isConnected) {
-            // First, add a user message to give the model context
-            // According to OpenAI docs, we need something in the conversation for the model to respond to
-            const conversationItem = {
-                type: 'conversation.item.create',
-                item: {
-                    type: 'message',
-                    role: 'user',
-                    content: [
-                        {
-                            type: 'input_text',
-                            text: 'Hello'
-                        }
-                    ]
-                }
-            };
-
-            this.openAIService.ws?.send(JSON.stringify(conversationItem));
-
-            // Now create a response - the model will greet based on instructions
+            // Create response to generate the greeting based on instructions
+            // The instructions already tell the model to greet the user
             const responseMessage = {
                 type: 'response.create',
                 response: {
