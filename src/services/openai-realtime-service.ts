@@ -175,17 +175,13 @@ export class OpenAIRealtimeService extends EventEmitter {
             require_approval: 'never'
         };
         sessionConfig.session.tools.push(mcpTool);
-        console.log('[MCP] Configuring session with MCP server');
-        console.log('[MCP] Server label:', mcpTool.server_label);
-        console.log('[MCP] Server URL:', mcpTool.server_url);
-        console.log('[MCP] Approval required:', mcpTool.require_approval);
+        console.log('Added MCP server: billing_account');
 
         this._ws.send(JSON.stringify(sessionConfig));
 
         // Add a system message to instruct the agent to check MCP resources
         setTimeout(() => {
             if (!this._ws) return;
-            console.log('[MCP] Adding system message to prompt agent to read MCP resources');
             const systemMessage = {
                 type: 'conversation.item.create',
                 item: {
@@ -200,7 +196,6 @@ export class OpenAIRealtimeService extends EventEmitter {
                 }
             };
             this._ws.send(JSON.stringify(systemMessage));
-            console.log('[MCP] System message sent');
         }, 100);
     }
 
@@ -208,23 +203,10 @@ export class OpenAIRealtimeService extends EventEmitter {
         switch (message.type) {
             case 'session.created':
                 console.log('OpenAI session created');
-                if (message.session) {
-                    console.log('Session ID:', message.session.id);
-                    console.log('Session model:', message.session.model);
-                }
                 break;
 
             case 'session.updated':
                 console.log('OpenAI session updated');
-                if (message.session?.tools) {
-                    const mcpTools = message.session.tools.filter((t: any) => t.type === 'mcp');
-                    if (mcpTools.length > 0) {
-                        console.log('[MCP] Session configured with', mcpTools.length, 'MCP server(s)');
-                        mcpTools.forEach((tool: any) => {
-                            console.log('[MCP] - Server:', tool.server_label);
-                        });
-                    }
-                }
                 break;
 
             case 'input_audio_buffer.speech_started':
@@ -397,63 +379,26 @@ export class OpenAIRealtimeService extends EventEmitter {
                 break;
 
             case 'response.function_call_arguments.delta':
-                if (message.delta) {
-                    console.log('[MCP] Function call arguments delta:', message.delta);
-                }
                 break;
 
             case 'response.function_call_arguments.done':
-                console.log('[MCP] Function call arguments completed:', message.arguments);
-                console.log(`[MCP] Function call detected: ${message.name}`);
+                console.log('Function call arguments completed:', message.arguments);
+                console.log(`MCP function call detected: ${message.name} - OpenAI will handle automatically`);
                 break;
 
             case 'response.mcp_call.started':
-                console.log('[MCP] Call started');
-                console.log('[MCP] Server:', message.server_label);
-                console.log('[MCP] Tool:', message.tool_name);
-                console.log('[MCP] Arguments:', JSON.stringify(message.arguments, null, 2));
+                console.log('MCP call started:', message);
                 break;
 
             case 'response.mcp_call.completed':
-                console.log('[MCP] Call completed successfully');
-                console.log('[MCP] Server:', message.server_label);
-                console.log('[MCP] Tool:', message.tool_name);
-                console.log('[MCP] Result:', JSON.stringify(message.result, null, 2));
-                console.log('[MCP] Triggering new response to process the result');
+                console.log('MCP call completed successfully:', JSON.stringify(message, null, 2));
+                // Trigger a new response after MCP call completes so the agent can use the result
+                console.log('Triggering new response after MCP call completion');
                 this.createResponse();
                 break;
 
             case 'response.mcp_call.failed':
-                console.error('[MCP] Call failed');
-                console.error('[MCP] Server:', message.server_label);
-                console.error('[MCP] Tool:', message.tool_name);
-                console.error('[MCP] Error:', JSON.stringify(message.error, null, 2));
-                break;
-
-            case 'mcp.resource.read':
-                console.log('[MCP] Resource read request');
-                console.log('[MCP] Server:', message.server_label);
-                console.log('[MCP] Resource URI:', message.uri);
-                break;
-
-            case 'mcp.resource.read.completed':
-                console.log('[MCP] Resource read completed');
-                console.log('[MCP] Server:', message.server_label);
-                console.log('[MCP] Resource URI:', message.uri);
-                console.log('[MCP] Content:', JSON.stringify(message.content, null, 2));
-                break;
-
-            case 'mcp.prompt.read':
-                console.log('[MCP] Prompt read request');
-                console.log('[MCP] Server:', message.server_label);
-                console.log('[MCP] Prompt name:', message.name);
-                break;
-
-            case 'mcp.prompt.read.completed':
-                console.log('[MCP] Prompt read completed');
-                console.log('[MCP] Server:', message.server_label);
-                console.log('[MCP] Prompt name:', message.name);
-                console.log('[MCP] Messages:', JSON.stringify(message.messages, null, 2));
+                console.error('MCP call failed:', JSON.stringify(message, null, 2));
                 break;
 
             case 'error':
