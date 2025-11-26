@@ -357,18 +357,15 @@ export class OpenAIRealtimeService extends EventEmitter {
                 break;
 
             case 'response.done':
-                // Log the full response to debug why there's no audio
-                console.log('[DEBUG] response.done full message:', JSON.stringify(message, null, 2));
-
                 // Extract and log the transcript from the response
                 try {
-                    if (message.response &&
-                        message.response.output &&
-                        message.response.output.length > 0 &&
-                        message.response.output[0].content &&
-                        message.response.output[0].content.length > 0 &&
+                    if (message.response && 
+                        message.response.output && 
+                        message.response.output.length > 0 && 
+                        message.response.output[0].content && 
+                        message.response.output[0].content.length > 0 && 
                         message.response.output[0].content[0].transcript) {
-
+                        
                         const transcript = message.response.output[0].content[0].transcript;
                         console.log(`[GREETING AGENT] Agent said: "${transcript}"`);
                     }
