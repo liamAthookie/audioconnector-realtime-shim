@@ -435,10 +435,6 @@ export class OpenAIRealtimeService extends EventEmitter {
                 break;
 
             default:
-                console.log('Unhandled OpenAI message type:', message.type);
-                if (message.type && message.type.includes('mcp')) {
-                    console.log('MCP event details:', JSON.stringify(message, null, 2));
-                }
                 break;
         }
     }
