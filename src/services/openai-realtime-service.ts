@@ -444,7 +444,6 @@ export class OpenAIRealtimeService extends EventEmitter {
 
         try {
             const args = JSON.parse(argumentsJson);
-            console.log('Function arguments:', args);
 
             // Handle the route_intent function call
             if (functionName === 'route_intent') {
