@@ -400,7 +400,8 @@ export class OpenAIRealtimeService extends EventEmitter {
             case 'response.function_call_arguments.done':
                 console.log('Function call arguments completed:', message.arguments);
                 // Don't intercept MCP function calls - let OpenAI handle them automatically
-                if (!message.name.startsWith('mcp_')) {
+                // MCP functions can have any name (e.g., billingAccount) and should not be intercepted
+                if (message.name === 'route_intent') {
                     this.handleFunctionCall(message.call_id, message.name, message.arguments);
                 } else {
                     console.log(`MCP function call detected: ${message.name} - OpenAI will handle automatically`);
@@ -445,18 +446,8 @@ export class OpenAIRealtimeService extends EventEmitter {
         try {
             const args = JSON.parse(argumentsJson);
 
-            // Handle the route_intent function call
             if (functionName === 'route_intent') {
                 this.handleRouteIntent(callId, args);
-            } else if (functionName.startsWith('mcp_')) {
-                // MCP function calls should be handled by OpenAI automatically
-                // We shouldn't receive these if require_approval is set to 'never'
-                // Log for debugging purposes
-                console.log(`MCP function call detected: ${functionName} - This should be handled automatically by OpenAI`);
-                // Don't send a response - let OpenAI handle it
-            } else {
-                console.warn(`Unknown function called: ${functionName}`);
-                this.sendFunctionCallResult(callId, { error: 'Unknown function' });
             }
         } catch (error) {
             console.error('Error parsing function arguments:', error);
