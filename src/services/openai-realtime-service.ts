@@ -297,7 +297,6 @@ export class OpenAIRealtimeService extends EventEmitter {
                 break;
 
             case 'response.created':
-                console.log('[DEBUG] Response created:', JSON.stringify(message.response, null, 2));
                 this.currentResponseId = message.response.id;
                 this.isGeneratingResponse = true;
                 this.shouldInterruptResponse = false;
@@ -305,14 +304,13 @@ export class OpenAIRealtimeService extends EventEmitter {
                 break;
 
             case 'response.audio.delta':
-                console.log('[DEBUG] Received audio delta');
                 if (message.delta) {
                     // Check if this response should be interrupted
                     if (this.shouldInterruptResponse) {
                         console.log('Skipping audio delta due to interruption');
                         return;
                     }
-
+                    
                     // OpenAI sends G.711 μ-law directly, no conversion needed
                     const audioData = Buffer.from(message.delta, 'base64');
                     this.audioBuffer.push(audioData);
@@ -320,14 +318,11 @@ export class OpenAIRealtimeService extends EventEmitter {
                 break;
 
             case 'response.audio.done':
-                console.log('[DEBUG] Audio done. Buffer length:', this.audioBuffer.length);
                 if (this.audioBuffer.length > 0 && !this.shouldInterruptResponse) {
                     const completeAudio = Buffer.concat(this.audioBuffer);
                     this.emit('audio_response', completeAudio);
                 } else if (this.shouldInterruptResponse) {
                     console.log('Skipping audio output due to interruption');
-                } else {
-                    console.log('[WARNING] No audio in buffer!');
                 }
                 this.audioBuffer = [];
                 break;
