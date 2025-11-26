@@ -93,12 +93,13 @@ export class BotResource extends EventEmitter {
         const sessionUpdate = {
             type: 'session.update',
             session: {
-                instructions: this.currentInstructions
+                instructions: this.currentInstructions,
+                tools: this.openAIService.getToolsConfiguration()
             }
         };
 
         this.openAIService.ws?.send(JSON.stringify(sessionUpdate));
-        console.log(`[SYSTEM] Updated session instructions for mode: ${this.currentMode.toUpperCase()}`);
+        console.log(`[SYSTEM] Updated session instructions and tools for mode: ${this.currentMode.toUpperCase()}`);
     }
 
     private generateHandoverMessage(): void {

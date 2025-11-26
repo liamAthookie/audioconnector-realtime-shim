@@ -46,9 +46,27 @@ export class OpenAIRealtimeService extends EventEmitter {
     get ws(): WebSocket | null {
         return this._ws;
     }
-    
+
     get isConnected(): boolean {
         return this._isConnected;
+    }
+
+    getToolsConfiguration(): any[] {
+        const toolsConfig: any[] = [];
+
+        const mcpTool = {
+            type: 'mcp',
+            server_label: 'billing_account',
+            server_url: 'https://billing-account-mcp-mock.fly.dev/mcp',
+            require_approval: 'never'
+        };
+        toolsConfig.push(mcpTool);
+
+        if (this.tools.length > 0) {
+            toolsConfig.push(...this.tools);
+        }
+
+        return toolsConfig;
     }
 
     constructor(config: OpenAIRealtimeConfig) {
