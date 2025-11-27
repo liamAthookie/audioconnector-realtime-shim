@@ -38,7 +38,7 @@ Your *only* job is to:
 # Minimal Entities (examples)
 **IMPORTANT:** Always include the `entities` object in your function call, even if empty `{}`.
 
-- `billing_invoice`: `{ "accountId" | "msisdn" }`  
+- `billing_invoice`: ``  
 - `plan_change`: `{ "subscriptionType" }`  
 - `cancel_subscription`: `{ "msisdn" }`  
 - `add_line`: `{ "subscriptionType" }`  
