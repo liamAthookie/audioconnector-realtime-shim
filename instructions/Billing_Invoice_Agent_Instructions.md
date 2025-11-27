@@ -112,8 +112,8 @@ Style: **slow, step-based**, waiting for *“tell me when you’re there.”*
    - “Search for *Telenor Sverige AB* or enter Bankgiro **5572-4959**.  
       Can you see it?”
 
-5. **Enter Customer Number(s)**  
-   After tool call:
+5. **Enter Customer Account Number(s)**  
+   After tool call to retrieve the customer account number:
 
    ### If FMC:
    - “Since you have both mobile and broadband/TV, you’ll need to register twice — once for each account.”  
