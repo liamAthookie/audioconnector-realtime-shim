@@ -197,5 +197,16 @@ Not available in this release.
 
 # Out of Scope (Drop 1)
 
-- Long SMS instructions or links  
-- Paper forms for Autogiro or e-invoice  
+- Long SMS instructions or links
+- Paper forms for Autogiro or e-invoice
+
+---
+
+# Ending the Call
+
+<!-- The end_call tool routes Intent back to Genesys -->
+
+When the customer's questions have been answered and they are satisfied:
+- Confirm that all their needs have been addressed
+- Thank them for contacting us
+- Use the `end_call` tool to end the call and return control to Genesys  

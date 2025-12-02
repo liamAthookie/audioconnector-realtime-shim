@@ -264,8 +264,27 @@ export class Session {
                         // Store output variables for when session ends
                         this.setOutputVariables(outputVariables);
                     });
+
+                    // Listen for end_call events from the bot
+                    // When the Realtime API calls end_call tool, this routes back to Genesys
+                    this.selectedBot.on('end_call', (endCallInfo: any) => {
+                        console.log('End call event received in session:', endCallInfo);
+
+                        // Set Intent to genesys to route back to Genesys flow
+                        const outputVariables: JsonStringMap = {
+                            'Intent': 'genesys'
+                        };
+
+                        // Include the reason for ending the call
+                        if (endCallInfo.reason) {
+                            outputVariables['end_call_reason'] = endCallInfo.reason;
+                        }
+
+                        // Store output variables for when session ends
+                        this.setOutputVariables(outputVariables);
+                    });
                 }
-                
+
                 return this.selectedBot != null;
             });
     }

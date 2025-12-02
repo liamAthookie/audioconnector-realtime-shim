@@ -244,6 +244,12 @@ export class BotResource extends EventEmitter {
             console.log(`[SYSTEM] Intent routing received: ${JSON.stringify(routingInfo)}`);
             this.handleIntentRouting(routingInfo);
         });
+
+        // Handle end_call tool invocations from the Realtime API
+        this.openAIService.on('end_call_requested', (endCallInfo: any) => {
+            console.log(`[SYSTEM] End call requested: ${JSON.stringify(endCallInfo)}`);
+            this.handleEndCallRequest(endCallInfo);
+        });
     }
 
     private handleIntentRouting(routingInfo: any): void {
@@ -286,6 +292,23 @@ export class BotResource extends EventEmitter {
             mode: this.currentMode,
             isHandover: this.currentMode === 'handover'
         });
+    }
+
+    private handleEndCallRequest(endCallInfo: any): void {
+        const { reason } = endCallInfo;
+
+        console.log(`[SYSTEM] Handling end call request - reason: ${reason}`);
+
+        // Emit end call event with Genesys intent to route back
+        // This sets Intent output variable to 'genesys' for Genesys routing
+        this.emit('end_call', {
+            reason,
+            intent: 'genesys',
+            transferBack: true
+        });
+
+        // End the session after routing back to Genesys
+        this.emit('session_end', `call_ended_${reason}`);
     }
 
     async initialize(): Promise<void> {

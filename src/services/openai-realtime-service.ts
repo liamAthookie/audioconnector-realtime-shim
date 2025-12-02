@@ -419,7 +419,8 @@ export class OpenAIRealtimeService extends EventEmitter {
                 console.log('Function call arguments completed:', message.arguments);
                 // Don't intercept MCP function calls - let OpenAI handle them automatically
                 // MCP functions can have any name (e.g., billingAccount) and should not be intercepted
-                if (message.name === 'route_intent') {
+                // Handle route_intent and end_call tools locally
+                if (message.name === 'route_intent' || message.name === 'end_call') {
                     this.handleFunctionCall(message.call_id, message.name, message.arguments);
                 } else {
                     console.log(`MCP function call detected: ${message.name} - OpenAI will handle automatically`);
@@ -464,8 +465,11 @@ export class OpenAIRealtimeService extends EventEmitter {
         try {
             const args = JSON.parse(argumentsJson);
 
+            // Route to appropriate handler based on function name
             if (functionName === 'route_intent') {
                 this.handleRouteIntent(callId, args);
+            } else if (functionName === 'end_call') {
+                this.handleEndCall(callId, args);
             }
         } catch (error) {
             console.error('Error parsing function arguments:', error);
@@ -509,6 +513,33 @@ export class OpenAIRealtimeService extends EventEmitter {
         this.sendFunctionCallResult(callId, {
             success: true,
             message: `Intent routing processed. Switching to appropriate mode based on intent support.`
+        }, false);
+    }
+
+    private handleEndCall(callId: string, args: any): void {
+        console.log('Processing end_call with args:', args);
+
+        // Validate required field
+        if (!args.reason) {
+            console.error('Missing required field: reason');
+            this.sendFunctionCallResult(callId, {
+                error: 'Missing required field: reason'
+            });
+            return;
+        }
+
+        console.log(`Call ending requested with reason: ${args.reason}`);
+
+        // Emit the end call event for the bot service to handle
+        // This will set Intent to genesys and end the session
+        this.emit('end_call_requested', {
+            reason: args.reason
+        });
+
+        // Send success response back to OpenAI without creating a response
+        this.sendFunctionCallResult(callId, {
+            success: true,
+            message: 'Call will be ended and control returned to Genesys.'
         }, false);
     }
 
