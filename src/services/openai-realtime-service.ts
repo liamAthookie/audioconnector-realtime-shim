@@ -11,6 +11,8 @@ export interface OpenAIRealtimeConfig {
     voice?: 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer';
     instructions?: string;
     temperature?: number;
+    useAzure?: boolean;
+    azureEndpoint?: string;
 }
 
 export interface OpenAIRealtimeResponse {
@@ -115,23 +117,41 @@ export class OpenAIRealtimeService extends EventEmitter {
         if (this.isConnected) {
             return;
         }
-        
+
         // Refresh feature flags at the start of each new connection
         console.log('Refreshing feature flags for new connection');
         await this.flagsmithService.refreshFlagsCache();
-        
+
         if (!this.config.apiKey) {
-            throw new Error('OpenAI API key is required. Please set the OPENAI_API_KEY environment variable.');
+            const provider = this.config.useAzure ? 'Azure OpenAI' : 'OpenAI';
+            const envVar = this.config.useAzure ? 'AZURE_OPENAILIVEAPI_KEY' : 'OPENAI_API_KEY';
+            throw new Error(`${provider} API key is required. Please set the ${envVar} environment variable.`);
         }
 
         return new Promise((resolve, reject) => {
-            const url = 'wss://api.openai.com/v1/realtime?model=' + this.config.model;
-            
-            this._ws = new WebSocket(url, {
-                headers: {
+            let url: string;
+            let headers: any;
+
+            if (this.config.useAzure) {
+                if (!this.config.azureEndpoint) {
+                    throw new Error('Azure endpoint is required when useAzure is true. Please set the AZURE_OPENAI_ENDPOINT environment variable.');
+                }
+                url = this.config.azureEndpoint;
+                headers = {
+                    'api-key': this.config.apiKey
+                };
+                console.log('Connecting to Azure OpenAI Realtime API:', url);
+            } else {
+                url = 'wss://api.openai.com/v1/realtime?model=' + this.config.model;
+                headers = {
                     'Authorization': `Bearer ${this.config.apiKey}`,
                     'OpenAI-Beta': 'realtime=v1'
-                }
+                };
+                console.log('Connecting to OpenAI Realtime API');
+            }
+
+            this._ws = new WebSocket(url, {
+                headers: headers
             });
 
             this._ws.on('open', () => {

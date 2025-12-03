@@ -31,18 +31,26 @@ export class BotResource extends EventEmitter {
 
     constructor(private botId: string, private config: any) {
         super();
-        
+
+        const useAzure = !!process.env.AZURE_OPENAILIVEAPI_KEY;
+        const apiKey = useAzure
+            ? process.env.AZURE_OPENAILIVEAPI_KEY || ''
+            : process.env.OPENAI_API_KEY || '';
+
         const openAIConfig: OpenAIRealtimeConfig = {
-            apiKey: process.env.OPENAI_API_KEY || '',
+            apiKey: apiKey,
             voice: 'alloy',
-            instructions: '', // Will be set after initialization
-            temperature: 0.7
+            instructions: '',
+            temperature: 0.7,
+            useAzure: useAzure,
+            azureEndpoint: process.env.AZURE_OPENAI_ENDPOINT
         };
+
+        console.log(`Initializing with ${useAzure ? 'Azure OpenAI' : 'OpenAI'} configuration`);
 
         this.openAIService = new OpenAIRealtimeService(openAIConfig);
         this.setupOpenAIEventHandlers();
-        
-        // Start with greeting instructions for new session (after openAIService is created)
+
         this.setGreetingMode();
     }
 
