@@ -49,4 +49,4 @@ jobs:
       - name: Deploy
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        run: flyctl deploy --remote-only
+        run: flyctl deploy --remote-only --env AZURE_OPENAI_ENDPOINT=${{ vars.AZURE_OPENAI_ENDPOINT }}
