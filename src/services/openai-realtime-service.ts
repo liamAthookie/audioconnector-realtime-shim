@@ -7,11 +7,11 @@ import * as path from 'path';
 
 export interface OpenAIRealtimeConfig {
     apiKey: string;
+    azureApiKey?: string;
     model?: string;
     voice?: 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer';
     instructions?: string;
     temperature?: number;
-    useAzure?: boolean;
     azureEndpoint?: string;
 }
 
@@ -122,9 +122,18 @@ export class OpenAIRealtimeService extends EventEmitter {
         console.log('Refreshing feature flags for new connection');
         await this.flagsmithService.refreshFlagsCache();
 
-        if (!this.config.apiKey) {
-            const provider = this.config.useAzure ? 'Azure OpenAI' : 'OpenAI';
-            const envVar = this.config.useAzure ? 'AZURE_OPENAILIVEAPI_KEY' : 'OPENAI_API_KEY';
+        // Check the use-azure feature flag
+        const useAzureValue = await this.flagsmithService.getFeatureValue('use-azure');
+        const useAzure = useAzureValue === 'true';
+
+        console.log(`use-azure feature flag: ${useAzure}`);
+
+        // Determine which API key to use
+        const apiKey = useAzure ? this.config.azureApiKey : this.config.apiKey;
+        const provider = useAzure ? 'Azure OpenAI' : 'OpenAI';
+
+        if (!apiKey) {
+            const envVar = useAzure ? 'AZURE_OPENAILIVEAPI_KEY' : 'OPENAI_API_KEY';
             throw new Error(`${provider} API key is required. Please set the ${envVar} environment variable.`);
         }
 
@@ -132,19 +141,19 @@ export class OpenAIRealtimeService extends EventEmitter {
             let url: string;
             let headers: any;
 
-            if (this.config.useAzure) {
+            if (useAzure) {
                 if (!this.config.azureEndpoint) {
-                    throw new Error('Azure endpoint is required when useAzure is true. Please set the AZURE_OPENAI_ENDPOINT environment variable.');
+                    throw new Error('Azure endpoint is required when use-azure flag is enabled. Please set the AZURE_OPENAI_ENDPOINT environment variable.');
                 }
                 url = this.config.azureEndpoint;
                 headers = {
-                    'api-key': this.config.apiKey
+                    'api-key': apiKey
                 };
                 console.log('Connecting to Azure OpenAI Realtime API:', url);
             } else {
                 url = 'wss://api.openai.com/v1/realtime?model=' + this.config.model;
                 headers = {
-                    'Authorization': `Bearer ${this.config.apiKey}`,
+                    'Authorization': `Bearer ${apiKey}`,
                     'OpenAI-Beta': 'realtime=v1'
                 };
                 console.log('Connecting to OpenAI Realtime API');

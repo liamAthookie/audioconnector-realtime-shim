@@ -27,7 +27,7 @@ export class FlagsmithService {
             this.flagsCache.clear();
             
             // Cache all flags
-            const flagNames = ['moderation-enabled']; // Add more flag names as needed
+            const flagNames = ['moderation-enabled', 'use-azure']; // Add more flag names as needed
             for (const flagName of flagNames) {
                 try {
                     const isEnabled = flags.isFeatureEnabled(flagName);
